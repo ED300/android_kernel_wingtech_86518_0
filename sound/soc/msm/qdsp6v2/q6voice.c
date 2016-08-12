@@ -29,6 +29,11 @@
 
 #define TIMEOUT_MS 300
 
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+extern bool in_phone_call;
+#endif
+
+#define DT2W_DEBUG 0
 
 #define CMD_STATUS_SUCCESS 0
 #define CMD_STATUS_FAIL 1
@@ -5198,7 +5203,7 @@ int voc_end_voice_call(uint32_t session_id)
 		if (common.is_vote_bms) {
 			/* vote low power to BMS during call stop */
 			voice_vote_powerstate_to_bms(v, false);
-		}
+		}	
 	} else {
 		pr_err("%s: Error: End voice called in state %d\n",
 			__func__, v->voc_state);
@@ -5207,8 +5212,14 @@ int voc_end_voice_call(uint32_t session_id)
 	}
 	if (common.ec_ref_ext)
 		voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
-
-	mutex_unlock(&v->lock);
+	mutex_unlock(&v->lock);	
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	in_phone_call = false;
+#if DT2W_DEBUG
+	pr_info("%s: Phone Call Ended, set the flag to %s\n",
+		__func__, (in_phone_call ? "true" : "false"));
+#endif
+#endif
 	return ret;
 }
 
@@ -5519,6 +5530,13 @@ int voc_start_voice_call(uint32_t session_id)
 		}
 
 		v->voc_state = VOC_RUN;
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+		in_phone_call = true;
+#if DT2W_DEBUG
+		pr_info("%s: Phone Call on Start, set the flag to %s\n",
+			__func__, (in_phone_call ? "true" : "false"));
+#endif
+#endif		
 	} else {
 		pr_err("%s: Error: Start voice called in state %d\n",
 			__func__, v->voc_state);

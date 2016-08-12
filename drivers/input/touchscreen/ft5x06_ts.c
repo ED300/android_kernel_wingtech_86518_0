@@ -33,6 +33,11 @@
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/prevent_sleep.h>
+bool dit_suspend = false;
+#endif
+
 #include <linux/hardware_info.h>
 
 #if CTP_CHARGER_DETECT
@@ -653,7 +658,19 @@ static int ft5x06_ts_suspend(struct device *dev)
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     char txbuf[2], i;
     int err;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	bool prevent_sleep = false;
+	ts_get_prevent_sleep(prevent_sleep);
+#endif
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	if (prevent_sleep) {
+		dit_suspend = true;
+		enable_irq_wake(data->client->irq);
+	} else {
+		dit_suspend = false;
+#endif	
+	
     if (data->loading_fw)
     {
         dev_info(dev, "Firmware loading in process...\n");
@@ -710,6 +727,9 @@ static int ft5x06_ts_suspend(struct device *dev)
 
     return 0;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	} // if (prevent_sleep)
+#endif
 
 pwr_off_fail:
     if (gpio_is_valid(data->pdata->reset_gpio))
@@ -727,7 +747,17 @@ static int ft5x06_ts_resume(struct device *dev)
 {
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     int err;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	bool prevent_sleep = false;
+	ts_get_prevent_sleep(prevent_sleep);
+#endif
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	if (prevent_sleep && dit_suspend) {
+		disable_irq_wake(data->client->irq);
+	} else {
+#endif	
+	
     if (!data->suspended)
     {
         dev_dbg(dev, "Already in awake state\n");
@@ -764,7 +794,10 @@ static int ft5x06_ts_resume(struct device *dev)
     msleep(data->pdata->soft_rst_dly);
 
     enable_irq(data->client->irq);
-
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	} // if (prevent_sleep)
+#endif
+	
 #if CTP_CHARGER_DETECT
 		batt_psy = power_supply_get_by_name("usb");
 		if (!batt_psy)
@@ -3053,8 +3086,12 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 
     err = request_threaded_irq(client->irq, NULL,
                                ft5x06_ts_interrupt,
-                               pdata->irq_gpio_flags | IRQF_ONESHOT,
-                               client->dev.driver->name, data);
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    pdata->irq_gpio_flags | IRQF_ONESHOT,
+#else
+    IRQF_ONESHOT | IRQF_NO_SUSPEND,
+#endif
+    client->dev.driver->name, data);
     if (err)
     {
         dev_err(&client->dev, "request irq failed\n");

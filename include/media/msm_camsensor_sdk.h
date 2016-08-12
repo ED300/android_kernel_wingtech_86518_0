@@ -20,6 +20,7 @@
 #define CSI_DECODE_DPCM_10_8_10 5
 #define MAX_CID                 16
 #define I2C_SEQ_REG_DATA_MAX    256
+#define I2C_REG_DATA_MAX       (8*1024)
 #define MSM_V4L2_PIX_FMT_META v4l2_fourcc('M', 'E', 'T', 'A') /* META */
 
 #define MAX_ACTUATOR_REG_TBL_SIZE 8
@@ -166,6 +167,12 @@ enum msm_flash_cfg_type_t {
 	CFG_FLASH_HIGH,
 };
 
+enum msm_sensor_output_format_t {
+	MSM_SENSOR_BAYER,
+	MSM_SENSOR_YCBCR,
+	MSM_SENSOR_META,
+};
+
 struct msm_sensor_power_setting {
 	enum msm_sensor_power_seq_type_t seq_type;
 	uint16_t seq_val;
@@ -212,6 +219,7 @@ struct msm_camera_sensor_slave_info {
 	uint8_t  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
 	uint8_t is_flash_supported;
+	enum msm_sensor_output_format_t output_format;	
 };
 
 struct msm_camera_i2c_reg_array {

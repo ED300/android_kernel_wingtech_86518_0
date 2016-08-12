@@ -202,7 +202,7 @@ int msm_flash_lm3642_led_low(struct msm_led_flash_ctrl_t *fctrl)
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 	}
 
-	return rc;
+	return 0;
 }
 
 int msm_flash_lm3642_led_high(struct msm_led_flash_ctrl_t *fctrl)
