@@ -2381,3 +2381,13 @@ source "crypto/Kconfig"
 source "lib/Kconfig"
 
 source "arch/arm/kvm/Kconfig"
+
+source "arch/arm/hotplug/ALUCARD/Kconfig"
+
+source "arch/arm/hotplug/MSMHOTPLUG/Kconfig"
+
+source "arch/arm/hotplug/MAKO/Kconfig"
+
+source "arch/arm/hotplug/INTELLIPLUG/Kconfig"
+
+source "arch/arm/hotplug/BRICKED/Kconfig"
