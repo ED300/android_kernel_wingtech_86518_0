@@ -1073,7 +1073,7 @@ static ssize_t store_history_size(struct device *dev,
 	if (hotplug.msm_enabled) {
 		flush_workqueue(hotplug_wq);
 		cancel_delayed_work_sync(&hotplug_work);
-		memset(stats.load_hist, 0, sizeof(stats.load_hist));
+		memset(stats.load_hist, sizeof(stats.load_hist), 0);
 	}
 
 	stats.hist_size = val;
