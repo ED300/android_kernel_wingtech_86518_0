@@ -475,6 +475,7 @@ static int ltr553_parse_dt(struct device *dev, struct ltr553_data *ltr)
 		return -EINVAL;
 	}
 	ltr->ps_wakeup_threshold = value;
+
 #ifdef CONFIG_PSENSOR_ONDEMAND_STATE
 	/* Prema Chand Alugu (premaca@gmail.com)
 	 *

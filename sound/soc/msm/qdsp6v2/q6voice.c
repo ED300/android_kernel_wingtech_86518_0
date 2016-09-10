@@ -5212,7 +5212,9 @@ int voc_end_voice_call(uint32_t session_id)
 	}
 	if (common.ec_ref_ext)
 		voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
-	mutex_unlock(&v->lock);	
+
+	mutex_unlock(&v->lock);
+	
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
 	in_phone_call = false;
 #if DT2W_DEBUG
@@ -5220,6 +5222,7 @@ int voc_end_voice_call(uint32_t session_id)
 		__func__, (in_phone_call ? "true" : "false"));
 #endif
 #endif
+
 	return ret;
 }
 
@@ -5530,13 +5533,15 @@ int voc_start_voice_call(uint32_t session_id)
 		}
 
 		v->voc_state = VOC_RUN;
+
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
 		in_phone_call = true;
 #if DT2W_DEBUG
 		pr_info("%s: Phone Call on Start, set the flag to %s\n",
 			__func__, (in_phone_call ? "true" : "false"));
 #endif
-#endif		
+#endif	
+	
 	} else {
 		pr_err("%s: Error: Start voice called in state %d\n",
 			__func__, v->voc_state);

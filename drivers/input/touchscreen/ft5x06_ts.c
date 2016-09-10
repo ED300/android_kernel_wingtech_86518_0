@@ -658,6 +658,7 @@ static int ft5x06_ts_suspend(struct device *dev)
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     char txbuf[2], i;
     int err;
+
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 	ts_get_prevent_sleep(prevent_sleep);
@@ -747,6 +748,7 @@ static int ft5x06_ts_resume(struct device *dev)
 {
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     int err;
+
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 	ts_get_prevent_sleep(prevent_sleep);
@@ -794,6 +796,7 @@ static int ft5x06_ts_resume(struct device *dev)
     msleep(data->pdata->soft_rst_dly);
 
     enable_irq(data->client->irq);
+
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	} // if (prevent_sleep)
 #endif
@@ -3086,12 +3089,14 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 
     err = request_threaded_irq(client->irq, NULL,
                                ft5x06_ts_interrupt,
+
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
     pdata->irq_gpio_flags | IRQF_ONESHOT,
 #else
     IRQF_ONESHOT | IRQF_NO_SUSPEND,
 #endif
     client->dev.driver->name, data);
+
     if (err)
     {
         dev_err(&client->dev, "request irq failed\n");
