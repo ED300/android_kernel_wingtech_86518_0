@@ -601,6 +601,7 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 extern bool s2w_scr_suspended;
 #endif
+
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
 extern bool dt2w_scr_suspended;
 #endif
@@ -638,9 +639,11 @@ end:
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
        s2w_scr_suspended = false;
 #endif
+
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
        dt2w_scr_suspended = false;
 #endif
+
 	return 0;
 }
 
@@ -675,9 +678,11 @@ end:
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
        s2w_scr_suspended = true;
 #endif
+
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
        dt2w_scr_suspended = true;
 #endif
+
 	return 0;
 }
 
