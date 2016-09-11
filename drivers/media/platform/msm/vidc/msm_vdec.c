@@ -1356,14 +1356,11 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	int ret = 0;
 	int i;
 	int max_input_size = 0;
-	struct hfi_device *hdev;
 
-	if (!inst || !f || !inst->core || !inst->core->device) {
+	if (!inst || !f) {
 		dprintk(VIDC_ERR, "%s invalid parameters\n", __func__);
 		return -EINVAL;
 	}
-
-	hdev = inst->core->device;
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		fmt = msm_comm_get_pixel_fmt_fourcc(vdec_formats,

@@ -1859,12 +1859,6 @@ static int try_set_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 		__temp; \
 	})
 
-	/*
-	 * Unlock the control prior to setting to the hardware. Otherwise
-	 * lower level code that attempts to do a get_ctrl() will end up
-	 * deadlocking.
-	 */
-	v4l2_ctrl_unlock(ctrl);
 	switch (ctrl->id) {
 	case V4L2_CID_MPEG_VIDC_VIDEO_IDR_PERIOD:
 		if (inst->fmts[CAPTURE_PORT]->fourcc != V4L2_PIX_FMT_H264 &&
@@ -2579,7 +2573,6 @@ static int try_set_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 			rc = -ENOTSUPP;
 			break;
 		}
-		msm_comm_scale_clocks_and_bus(inst);
 		break;
 	case V4L2_CID_MPEG_VIDC_VIDEO_H264_VUI_BITSTREAM_RESTRICT:
 		property_id = HAL_PARAM_VENC_H264_VUI_BITSTREAM_RESTRC;
@@ -2709,7 +2702,7 @@ static int try_set_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 		break;
 	}
 #undef TRY_GET_CTRL
-	v4l2_ctrl_lock(ctrl);
+
 	if (!rc && property_id) {
 		dprintk(VIDC_DBG, "Control: HAL property=%x,ctrl_value=%d\n",
 				property_id,
@@ -3130,7 +3123,6 @@ int msm_venc_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	int rc = 0;
 	int i;
 	struct hfi_device *hdev;
-
 	if (!inst || !f) {
 		dprintk(VIDC_ERR,
 			"Invalid input, inst = %p, format = %p\n", inst, f);

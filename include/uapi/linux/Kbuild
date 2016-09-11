@@ -1,4 +1,5 @@
 # UAPI Header export list
+header-y += android/
 header-y += byteorder/
 header-y += can/
 header-y += caif/
@@ -286,6 +287,8 @@ header-y += msm_audio_ac3.h
 header-y += msm_audio_calibration.h
 header-y += msm_audio_wma.h
 header-y += msm_audio_wmapro.h
+header-y += msm_audio_alac.h
+header-y += msm_audio_ape.h
 header-y += msm_audio_mvs.h
 header-y += msm_audio_qcp.h
 header-y += msm_audio_amrnb.h
