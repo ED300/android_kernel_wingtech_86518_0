@@ -523,14 +523,12 @@ static inline int cpufreq_generic_exit(struct cpufreq_policy *policy)
  *                         CPUFREQ STATS                             *
  *********************************************************************/
 
-<<<<<<< HEAD
 void acct_update_power(struct task_struct *p, cputime_t cputime);
-=======
+
 #ifdef CONFIG_CPU_FREQ_STAT
 void acct_update_power(struct task_struct *p, cputime_t cputime);
 #else
 static inline void acct_update_power(struct task_struct *p, cputime_t cputime) {}
 #endif
->>>>>>> ce14eeb... Tweaks and Optmization
 
 #endif /* _LINUX_CPUFREQ_H */
