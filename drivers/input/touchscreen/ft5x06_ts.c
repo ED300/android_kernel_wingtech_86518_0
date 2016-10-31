@@ -669,7 +669,7 @@ static int ft5x06_ts_suspend(struct device *dev)
 		enable_irq_wake(data->client->irq);
 	} else {
 		dit_suspend = false;
-#endif
+#endif	
 	
     if (data->loading_fw)
     {
@@ -727,6 +727,9 @@ static int ft5x06_ts_suspend(struct device *dev)
 
     return 0;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	} // if (prevent_sleep)
+#endif
 
 pwr_off_fail:
     if (gpio_is_valid(data->pdata->reset_gpio))
@@ -738,10 +741,6 @@ pwr_off_fail:
     enable_irq(data->client->irq);
     return err;
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	} // if (prevent_sleep)
-#endif
-    return 0;
 }
 
 static int ft5x06_ts_resume(struct device *dev)
@@ -757,7 +756,7 @@ static int ft5x06_ts_resume(struct device *dev)
 	if (prevent_sleep && dit_suspend) {
 		disable_irq_wake(data->client->irq);
 	} else {
-#endif
+#endif	
 	
     if (!data->suspended)
     {
@@ -812,13 +811,13 @@ static int ft5x06_ts_resume(struct device *dev)
 		pre_charger_status = is_charger_plug;
 #endif
 
-
-    data->suspended = false;
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	} // if (prevent_sleep)
 #endif
-    return 0;	
+
+    data->suspended = false;
+
+    return 0;
 }
 
 static const struct dev_pm_ops ft5x06_ts_pm_ops =
@@ -3088,9 +3087,9 @@ static int ft5x06_ts_probe(struct i2c_client *client,
     err = request_threaded_irq(client->irq, NULL,
                                ft5x06_ts_interrupt,
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-                               pdata->irq_gpio_flags | IRQF_ONESHOT,
+                               pdata->irq_gpio_flags | IRQF_ONESHOT | IRQF_NO_SUSPEND,
 #else
-                               IRQF_ONESHOT | IRQF_NO_SUSPEND,
+                               pdata->irq_gpio_flags | IRQF_ONESHOT,
 #endif
                                client->dev.driver->name, data);
     if (err)
