@@ -24,6 +24,15 @@
 #include <asm/ioctls.h>
 #include "audio_utils.h"
 
+/*
+ * Define maximum buffer size. Below values are chosen considering the higher
+ * values used among all native drivers.
+ */
+#define MAX_FRAME_SIZE	1536
+#define MAX_FRAMES	5
+#define META_SIZE	(sizeof(struct meta_out_dsp))
+#define MAX_BUFFER_SIZE	(1 + ((MAX_FRAME_SIZE + META_SIZE) * MAX_FRAMES))
+
 static int audio_in_pause(struct q6audio_in  *audio)
 {
 	int rc;
@@ -317,7 +326,7 @@ long audio_in_ioctl(struct file *file,
 		struct msm_audio_stream_config cfg;
 		if (copy_from_user(&cfg, (void *)arg, sizeof(cfg))) {
 			pr_err("%s: copy_from_user for AUDIO_SET_STREAM_CONFIG failed\n"
-				, __func__);
+	                                    , __func__);
 			rc = -EFAULT;
 			break;
 		}
@@ -329,6 +338,10 @@ long audio_in_ioctl(struct file *file,
 			rc = -EINVAL;
 			break;
 		}
+		if (cfg.buffer_size > MAX_BUFFER_SIZE) {
+			rc = -EINVAL;
+			break;
+		}		
 		audio->str_cfg.buffer_size = cfg.buffer_size;
 		audio->str_cfg.buffer_count = cfg.buffer_count;
 		if (audio->opened) {
@@ -588,6 +601,7 @@ long audio_in_compat_ioctl(struct file *file,
 	}
 	case AUDIO_GET_CONFIG_32: {
 		struct msm_audio_config32 cfg_32;
+	        memset(&cfg_32, 0, sizeof(cfg_32));
 		cfg_32.buffer_size = audio->pcm_cfg.buffer_size;
 		cfg_32.buffer_count = audio->pcm_cfg.buffer_count;
 		cfg_32.channel_count = audio->pcm_cfg.channel_count;
