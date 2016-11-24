@@ -33,9 +33,6 @@
 
 static unsigned int dev_num = 1;
 static struct cdev wan_ioctl_cdev;
-static unsigned int process_ioctl = 1;
-static struct class *class;
-static dev_t device;
 
 static long wan_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -45,12 +42,6 @@ static long wan_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	IPAWANDBG("device %s got ioctl events :>>>\n",
 		DRIVER_NAME);
-
-	if (!process_ioctl) {
-		IPAWANDBG("modem is in SSR, ignoring ioctl\n");
-		return -EAGAIN;
-	}
-
 	switch (cmd) {
 	case WAN_IOC_ADD_FLT_RULE:
 		IPAWANDBG("device %s got WAN_IOC_ADD_FLT_RULE :>>>\n",
@@ -144,68 +135,41 @@ const struct file_operations fops = {
 int wan_ioctl_init(void)
 {
 	unsigned int wan_ioctl_major = 0;
-	int ret;
+	dev_t device = MKDEV(wan_ioctl_major, 0);
+	int alloc_ret = 0;
+	int cdev_ret = 0;
+	struct class *class;
 	struct device *dev;
 
-	device = MKDEV(wan_ioctl_major, 0);
-
-	ret = alloc_chrdev_region(&device, 0, dev_num, DRIVER_NAME);
-	if (ret) {
+	alloc_ret = alloc_chrdev_region(&device, 0, dev_num, DRIVER_NAME);
+	if (alloc_ret) {
 		IPAWANERR(":device_alloc err.\n");
-		goto dev_alloc_err;
+		goto error;
 	}
 	wan_ioctl_major = MAJOR(device);
 
 	class = class_create(THIS_MODULE, DRIVER_NAME);
-	if (IS_ERR(class)) {
-		IPAWANERR(":class_create err.\n");
-		goto class_err;
-	}
-
 	dev = device_create(class, NULL, device,
 		NULL, DRIVER_NAME);
 	if (IS_ERR(dev)) {
 		IPAWANERR(":device_create err.\n");
-		goto device_err;
+		goto error;
 	}
 
 	cdev_init(&wan_ioctl_cdev, &fops);
-	ret = cdev_add(&wan_ioctl_cdev, device, dev_num);
-	if (ret) {
+	cdev_ret = cdev_add(&wan_ioctl_cdev, device, dev_num);
+	if (cdev_ret) {
 		IPAWANERR(":cdev_add err.\n");
-		goto cdev_add_err;
+		goto error;
 	}
-
-	process_ioctl = 1;
 
 	IPAWANDBG("IPA %s major(%d) initial ok :>>>>\n",
 	DRIVER_NAME, wan_ioctl_major);
 	return 0;
-
-cdev_add_err:
-	device_destroy(class, device);
-device_err:
-	class_destroy(class);
-class_err:
-	unregister_chrdev_region(device, dev_num);
-dev_alloc_err:
+error:
+	if (cdev_ret == 0)
+		cdev_del(&wan_ioctl_cdev);
+	if (alloc_ret == 0)
+		unregister_chrdev_region(device, dev_num);
 	return -ENODEV;
-}
-
-void wan_ioctl_stop_qmi_messages(void)
-{
-	process_ioctl = 0;
-}
-
-void wan_ioctl_enable_qmi_messages(void)
-{
-	process_ioctl = 1;
-}
-
-void wan_ioctl_deinit(void)
-{
-	cdev_del(&wan_ioctl_cdev);
-	device_destroy(class, device);
-	class_destroy(class);
-	unregister_chrdev_region(device, dev_num);
 }

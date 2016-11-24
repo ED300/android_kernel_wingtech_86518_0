@@ -20,16 +20,6 @@ if CPU_FREQ
 config CPU_FREQ_GOV_COMMON
 	bool
 
-config SCHED_FREQ_INPUT
-	bool "Scheduler inputs to cpufreq governor"
-	depends on SCHED_HMP
-	help
-	  This option enables support for scheduler based CPU utilization
-	  calculations which may then be used by any cpufreq governor. The
-	  scheduler keeps track of "recent" cpu demand of tasks, which can
-	  help determine need for changing frequency well in advance of what
-	  a governor would have been able to detect on its own.
-
 config CPU_FREQ_STAT
 	tristate "CPU frequency translation statistics"
 	default y
@@ -178,13 +168,6 @@ config CPU_FREQ_DEFAULT_GOV_ZZMOOVE
 	  frequency lookup tables and optimized scaling triggers instead of
 	  % frequency steps to get smooth up/downscaling dependant on CPU load.
 
-config CPU_FREQ_DEFAULT_GOV_ELEMENTALX
-	bool "elementalx"
-	select CPU_FREQ_GOV_ELEMENTALX
-	select CPU_FREQ_GOV_PERFORMANCE
-	help
-	  Use the CPUFreq governor 'elementalx' as default.
-
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -241,6 +224,7 @@ config CPU_FREQ_GOV_ONDEMAND
 	  For details, take a look at linux/Documentation/cpu-freq.
 
 	  If in doubt, say N.
+
 
 config CPU_FREQ_GOV_ONDEMANDPLUS
 	tristate "'ondemandplus' cpufreq policy governor"
@@ -359,19 +343,6 @@ config CPU_FREQ_GOV_ZZMOOVE
 	  % frequency steps to get smooth up/downscaling dependant on CPU load.
 	  If in doubt, say N.
 
-config CPU_FREQ_GOV_ELEMENTALX
-	tristate "'elementalx' cpufreq policy governor"
-	select CPU_FREQ_TABLE
-	help
-	  'elementalx' - This driver adds a dynamic cpufreq policy governor.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called cpufreq_elementalx.
-
-	  For details, take a look at linux/Documentation/cpu-freq.
-
-	  If in doubt, say N.
-
 config GENERIC_CPUFREQ_CPU0
 	tristate "Generic CPU0 cpufreq driver"
 	depends on HAVE_CLK && REGULATOR && PM_OPP && OF
@@ -388,7 +359,7 @@ source "drivers/cpufreq/Kconfig.x86"
 endmenu
 
 menu "ARM CPU frequency scaling drivers"
-depends on ARM || ARM64
+depends on ARM
 source "drivers/cpufreq/Kconfig.arm"
 endmenu
 

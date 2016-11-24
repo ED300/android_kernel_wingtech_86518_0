@@ -152,7 +152,11 @@ void timekeeping_inject_sleeptime(struct timespec *delta);
 #ifdef CONFIG_ARCH_USES_GETTIMEOFFSET
 extern u32 (*arch_gettimeoffset)(void);
 #endif
-
+//WingTech: Alex_ma <-add for RTC time of printk-> on20140918
+#if defined(CONFIG_PRINTK_RTC_TIME)
+extern int do_gettimeofday_nolock(struct timespec *tv);;
+#endif
+////WingTech: Alex_ma <-add for RTC time of printk-> on20140918 end
 extern void do_gettimeofday(struct timeval *tv);
 extern int do_settimeofday(const struct timespec *tv);
 extern int do_sys_settimeofday(const struct timespec *tv,
@@ -172,6 +176,19 @@ extern void getnstime_raw_and_real(struct timespec *ts_raw,
 extern void getboottime(struct timespec *ts);
 extern void monotonic_to_bootbased(struct timespec *ts);
 extern void get_monotonic_boottime(struct timespec *ts);
+
+static inline bool timeval_valid(const struct timeval *tv)
+{
+	/* Dates before 1970 are bogus */
+	if (tv->tv_sec < 0)
+		return false;
+
+	/* Can't have more microseconds then a second */
+	if (tv->tv_usec < 0 || tv->tv_usec >= USEC_PER_SEC)
+		return false;
+
+	return true;
+}
 
 extern struct timespec timespec_trunc(struct timespec t, unsigned gran);
 extern int timekeeping_valid_for_hres(void);

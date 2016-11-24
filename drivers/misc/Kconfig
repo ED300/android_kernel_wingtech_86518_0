@@ -612,24 +612,17 @@ config TI_DRV2667
 	  To compile this driver as a module, choose M here: the
 	  module will be called ti_drv2667.
 
-config QCOM_LIQUID_DOCK
-	tristate "QTI LiQUID Docking Station USB/Ethernet support"
+config APQ8084_DOCKING_STATION
+	tristate "QTI APQ8084 Docking Station USB/Ethernet support"
 	depends on OF_GPIO
 	help
 	  This option enables support for the USB and Ethernet ports found on
-
+	  the QTI APQ8084 Docking Station.
+	  
 config HARDWARE_INFO
 	tristate "Wingtech Hardware Information support"
 	help
-	  This option enables device driver to initial the hardware info module.
-	  the docking station of various models of Qualcomm Technology's
-	  LiQUID Mobile Development Platforms.
-
-config UID_CPUTIME
-   tristate "Per-UID cpu time statistics"
-   depends on PROFILING
-   help
-     Per UID based cpu time statistics exported to /proc/uid_cputime
+	  This option enables device driver to initial the hardware info module.	  
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"

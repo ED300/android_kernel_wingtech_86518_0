@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -56,7 +56,6 @@ static void __iomem *virt_bases[N_BASES];
 #define GPLL1_USER_CTL					0x20010
 #define GPLL1_CONFIG_CTL				0x20014
 #define GPLL1_STATUS					0x2001C
-#define SNOC_QOSGEN					0x2601C
 #define GPLL2_MODE					0x4A000
 #define GPLL2_L_VAL					0x4A004
 #define GPLL2_M_VAL					0x4A008
@@ -349,7 +348,7 @@ static struct pll_freq_tbl apcs_pll_freq[] = {
 	F_APCS_PLL(1363200000, 71, 0x0, 0x1, 0x0, 0x0, 0x0),
 	F_APCS_PLL(1401600000, 73, 0x0, 0x1, 0x0, 0x0, 0x0),
 	F_APCS_PLL(1497600000, 78, 0x0, 0x1, 0x0, 0x0, 0x0),
-	F_APCS_PLL(1593600000, 83, 0x0, 0x1, 0x0, 0x0, 0x0),
+	F_APCS_PLL(1593600000, 83, 0x0, 0x1, 0x0, 0x0, 0x0),	
 	PLL_F_END
 };
 
@@ -1061,7 +1060,7 @@ static struct rcg_clk byte0_clk_src = {
 	.c = {
 		.dbg_name = "byte0_clk_src",
 		.ops = &clk_ops_byte,
-		VDD_DIG_FMAX_MAP2(LOW, 94400000, NOMINAL, 188500000),
+		VDD_DIG_FMAX_MAP2(LOW, 112500000, NOMINAL, 187500000),
 		CLK_INIT(byte0_clk_src.c),
 	},
 };
@@ -1221,7 +1220,6 @@ static struct rcg_clk sdcc2_apps_clk_src = {
 
 static struct clk_freq_tbl ftbl_gcc_usb_hs_system_clk[] = {
 	F(  80000000,	   gpll0,  10,	  0,	0),
-	F( 100000000,	   gpll0,   8,	  0,	0),
 	F_END
 };
 
@@ -1234,7 +1232,7 @@ static struct rcg_clk usb_hs_system_clk_src = {
 	.c = {
 		.dbg_name = "usb_hs_system_clk_src",
 		.ops = &clk_ops_rcg,
-		VDD_DIG_FMAX_MAP2(LOW, 57140000, NOMINAL, 100000000),
+		VDD_DIG_FMAX_MAP2(LOW, 57140000, NOMINAL, 80000000),
 		CLK_INIT(usb_hs_system_clk_src.c),
 	},
 };
@@ -2340,18 +2338,6 @@ static struct branch_clk gcc_venus0_vcodec0_clk = {
 	},
 };
 
-static struct gate_clk gcc_snoc_qosgen_clk = {
-	.en_mask = BIT(0),
-	.en_reg = SNOC_QOSGEN,
-	.base = &virt_bases[GCC_BASE],
-	.c = {
-		.dbg_name = "gcc_snoc_qosgen_clk",
-		.ops = &clk_ops_gate,
-		.flags = CLKFLAG_SKIP_HANDOFF,
-		CLK_INIT(gcc_snoc_qosgen_clk.c),
-	},
-};
-
 static struct mux_clk gcc_debug_mux;
 static struct clk_ops clk_ops_debug_mux;
 
@@ -2484,9 +2470,8 @@ static struct mux_clk gcc_debug_mux = {
 	.priv = &debug_mux_priv,
 	.ops = &gcc_debug_mux_ops,
 	.offset = GCC_DEBUG_CLK_CTL,
-	.mask = 0x1FF,
-	.en_offset = GCC_DEBUG_CLK_CTL,
 	.en_mask = BIT(16),
+	.mask = 0x1FF,
 	.base = &virt_bases[GCC_BASE],
 	MUX_REC_SRC_LIST(
 		&rpm_debug_clk.c,
@@ -2734,15 +2719,14 @@ static struct clk_lookup msm_clocks_lookup[] = {
 	CLK_LIST(gcc_bimc_gfx_clk),
 	CLK_LIST(gcc_bimc_gpu_clk),
 	CLK_LIST(wcnss_m_clk),
+};
 
+static struct clk_lookup msm_clocks_gcc_8916_crypto[] = {
 	/* Crypto clocks */
-	CLK_LIST(gcc_crypto_clk),
-	CLK_LIST(gcc_crypto_ahb_clk),
-	CLK_LIST(gcc_crypto_axi_clk),
-	CLK_LIST(crypto_clk_src),
-
-	/* QoS Reference clock */
-	CLK_LIST(gcc_snoc_qosgen_clk),
+	CLK_LOOKUP_OF("core_clk",     gcc_crypto_clk,      "scm"),
+	CLK_LOOKUP_OF("iface_clk",    gcc_crypto_ahb_clk,  "scm"),
+	CLK_LOOKUP_OF("bus_clk",      gcc_crypto_axi_clk,  "scm"),
+	CLK_LOOKUP_OF("core_clk_src", crypto_clk_src,      "scm"),
 };
 
 static int msm_gcc_probe(struct platform_device *pdev)
@@ -2826,6 +2810,12 @@ static int msm_gcc_probe(struct platform_device *pdev)
 	ret = of_msm_clock_register(pdev->dev.of_node,
 				msm_clocks_lookup,
 				ARRAY_SIZE(msm_clocks_lookup));
+	if (ret)
+		return ret;
+
+	ret = of_msm_clock_register(pdev->dev.of_node,
+				 msm_clocks_gcc_8916_crypto,
+				 ARRAY_SIZE(msm_clocks_gcc_8916_crypto));
 	if (ret)
 		return ret;
 

@@ -12,6 +12,7 @@
  */
 #include <linux/module.h>
 #include <linux/export.h>
+#include <mach/gpiomux.h>
 #include "msm_camera_io_util.h"
 #include "msm_led_flash.h"
 
@@ -202,7 +203,7 @@ int msm_flash_lm3642_led_low(struct msm_led_flash_ctrl_t *fctrl)
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 	}
 
-	return 0;
+	return rc;
 }
 
 int msm_flash_lm3642_led_high(struct msm_led_flash_ctrl_t *fctrl)

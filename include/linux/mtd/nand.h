@@ -610,7 +610,6 @@ struct nand_flash_dev {
 	unsigned int options;
 	uint16_t id_len;
 	uint16_t oobsize;
-	unsigned int ecc_correctable_bits;
 };
 
 /**

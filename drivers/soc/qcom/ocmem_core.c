@@ -622,22 +622,14 @@ static int do_lock(enum ocmem_client id, unsigned long offset,
 		u32 id;
 		u32 offset;
 		u32 size;
-		u32 mode;
 	} request;
-	struct scm_desc desc = {0};
 
-	desc.arginfo = SCM_ARGS(4);
-	desc.args[0] = request.id = get_tz_id(id);
-	desc.args[1] = request.offset = offset;
-	desc.args[2] = request.size = len;
-	desc.args[3] = request.mode = mode;
+	request.id = get_tz_id(id);
+	request.offset = offset;
+	request.size = len;
 
-	if (!is_scm_armv8())
-		rc = scm_call(OCMEM_SVC_ID, OCMEM_LOCK_CMD_ID, &request,
+	rc = scm_call(OCMEM_SVC_ID, OCMEM_LOCK_CMD_ID, &request,
 				sizeof(request), NULL, 0);
-	else
-		rc = scm_call2(SCM_SIP_FNID(OCMEM_SVC_ID, OCMEM_LOCK_CMD_ID),
-			       &desc);
 	if (rc)
 		pr_err("ocmem: Failed to lock region %s[%lx -- %lx] ret = %d\n",
 				get_name(id), offset, offset + len - 1, rc);
@@ -653,19 +645,13 @@ static int do_unlock(enum ocmem_client id, unsigned long offset,
 		u32 offset;
 		u32 size;
 	} request;
-	struct scm_desc desc = {0};
 
-	desc.arginfo = SCM_ARGS(3);
-	desc.args[0] = request.id = get_tz_id(id);
-	desc.args[1] = request.offset = offset;
-	desc.args[2] = request.size = len;
+	request.id = get_tz_id(id);
+	request.offset = offset;
+	request.size = len;
 
-	if (!is_scm_armv8())
-		rc = scm_call(OCMEM_SVC_ID, OCMEM_UNLOCK_CMD_ID, &request,
-					sizeof(request), NULL, 0);
-	else
-		rc = scm_call2(SCM_SIP_FNID(OCMEM_SVC_ID, OCMEM_UNLOCK_CMD_ID),
-			       &desc);
+	rc = scm_call(OCMEM_SVC_ID, OCMEM_UNLOCK_CMD_ID, &request,
+				sizeof(request), NULL, 0);
 	if (rc)
 		pr_err("ocmem: Failed to unlock region %s[%lx -- %lx] ret = %d\n",
 				get_name(id), offset, offset + len - 1, rc);
@@ -681,19 +667,13 @@ int ocmem_enable_dump(enum ocmem_client id, unsigned long offset,
 		u32 offset;
 		u32 size;
 	} request;
-	struct scm_desc desc = {0};
 
-	desc.arginfo = SCM_ARGS(3);
-	desc.args[0] = request.id = get_tz_id(id);
-	desc.args[1] = request.offset = offset;
-	desc.args[2] = request.size = len;
+	request.id = get_tz_id(id);
+	request.offset = offset;
+	request.size = len;
 
-	if (!is_scm_armv8())
-		rc = scm_call(OCMEM_SVC_ID, OCMEM_ENABLE_DUMP_CMD_ID, &request,
+	rc = scm_call(OCMEM_SVC_ID, OCMEM_ENABLE_DUMP_CMD_ID, &request,
 				sizeof(request), NULL, 0);
-	else
-		rc = scm_call2(SCM_SIP_FNID(OCMEM_SVC_ID,
-			       OCMEM_ENABLE_DUMP_CMD_ID), &desc);
 	if (rc)
 		pr_err("ocmem: Failed to enable dump %s[%lx -- %lx] ret = %d\n",
 				get_name(id), offset, offset + len - 1, rc);
@@ -709,19 +689,13 @@ int ocmem_disable_dump(enum ocmem_client id, unsigned long offset,
 		u32 offset;
 		u32 size;
 	} request;
-	struct scm_desc desc = {0};
 
-	desc.arginfo = SCM_ARGS(3);
-	desc.args[0] = request.id = get_tz_id(id);
-	desc.args[1] = request.offset = offset;
-	desc.args[2] = request.size = len;
+	request.id = get_tz_id(id);
+	request.offset = offset;
+	request.size = len;
 
-	if (!is_scm_armv8())
-		rc = scm_call(OCMEM_SVC_ID, OCMEM_DISABLE_DUMP_CMD_ID, &request,
+	rc = scm_call(OCMEM_SVC_ID, OCMEM_DISABLE_DUMP_CMD_ID, &request,
 				sizeof(request), NULL, 0);
-	else
-		rc = scm_call2(SCM_SIP_FNID(OCMEM_SVC_ID,
-			       OCMEM_DISABLE_DUMP_CMD_ID), &desc);
 	if (rc)
 		pr_err("ocmem: Failed to disable dump %s[%lx -- %lx] ret = %d\n",
 				get_name(id), offset, offset + len - 1, rc);
@@ -731,8 +705,16 @@ int ocmem_disable_dump(enum ocmem_client id, unsigned long offset,
 int ocmem_restore_sec_program(int sec_id)
 {
 	int rc, scm_ret = 0;
+	struct msm_scm_sec_cfg {
+		unsigned int id;
+		unsigned int spare;
+	} cfg;
 
-	rc = scm_restore_sec_cfg(sec_id, 0, &scm_ret);
+	cfg.id = sec_id;
+
+	rc = scm_call(OCMEM_SECURE_SVC_ID, OCMEM_SECURE_CFG_ID, &cfg,
+			sizeof(cfg), &scm_ret, sizeof(scm_ret));
+
 	if (rc || scm_ret) {
 		pr_err("ocmem: Failed to enable secure programming\n");
 		return rc ? rc : -EINVAL;

@@ -193,6 +193,4 @@ enum msm_bus_rpm_mas_field_type {
 };
 
 #include <dt-bindings/msm/msm-bus-ids.h>
-
-
 #endif /*__ASM_ARCH_MSM_BUS_BOARD_H */

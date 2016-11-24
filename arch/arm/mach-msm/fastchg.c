@@ -47,7 +47,7 @@ __setup("ffc=", get_fastcharge_opt);
 static ssize_t force_fast_charge_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	size_t count = 0;
-	count = sprintf(buf, "%d\n", force_fast_charge);
+	count += sprintf(buf, "%d\n", force_fast_charge);
 	return count;
 }
 

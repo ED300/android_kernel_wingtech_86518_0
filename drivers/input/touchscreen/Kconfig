@@ -487,19 +487,6 @@ config TOUCHSCREEN_EDT_FT5X06
 	  To compile this driver as a module, choose M here: the
 	  module will be called edt-ft5x06.
 
-config TOUCHSCREEN_GSL1688E
-	tristate "SLIEAD GSL1688E I2C Touchscreen support"
-	depends on I2C
-	help
-	  Say Y here if you have an EDT "Polytouch" touchscreen based
-	  on the SLIEAD GSL1688E family of controllers connected to
-	  your system.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called gsl1688e.
-
 config TOUCHSCREEN_MIGOR
 	tristate "Renesas MIGO-R touchscreen"
 	depends on SH_MIGOR && I2C
@@ -950,24 +937,6 @@ config TOUCHSCREEN_FT5X06
          To compile this driver as a module, choose M here: the
          module will be called ft5x06_ts.
 
-config TOUCHSCREEN_FT5X06_PSENSOR
-       tristate "FocalTech proximity feature support"
-       depends on TOUCHSCREEN_FT5X06 && SENSORS
-       help
-         Say Y here if you want to support ft5x06's proximity
-         feature.
-
-         If unsure, say N.
-
-config TOUCHSCREEN_FT5X06_GESTURE
-       tristate "FocalTech gesture feature support"
-       depends on TOUCHSCREEN_FT5X06
-       help
-         Say Y here if you want to support ft5x06's gesture
-         feature.
-
-         If unsure, say N.
-
 config TOUCHSCREEN_MSTAR21XX
        tristate "mstar touchscreens"
        depends on I2C
@@ -1034,10 +1003,10 @@ config TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE
 
 config SECURE_TOUCH
 	bool "Secure Touch"
-	depends on (TOUCHSCREEN_ATMEL_MXT || TOUCHSCREEN_SYNAPTICS_I2C_RMI4 || \
-	  TOUCHSCREEN_SYNAPTICS_DSX_I2C_v21 || TOUCHSCREEN_ATMEL_MAXTOUCH_TS)
+	depends on TOUCHSCREEN_ATMEL_MXT
 	help
-	  Say Y here to enable Secure Touch in supported drivers.
+	  Say Y here to enable Secure Touch support in the Atmel MXT
+	  driver.
 
 	  If unsure, say N.
 
@@ -1050,31 +1019,7 @@ config TOUCHSCREEN_GT9XX
 	  report 5 touches at a time.
 
           If unsure, say N.
-
-source "drivers/input/touchscreen/gt9xx/Kconfig"
-
-config TOUCHSCREEN_BU21150
-	tristate "JDI AFE BU21150"
-	depends on SPI_MASTER
-	help
-	  This enables support for character device channel for
-	  Rohm BU21150 Touch AFE.
-
-	  Say Y here if you have a Rohm bu21150 AFE connected to
-	  your system.
-
-	  If unsure, say N.
-
-config INPUT_MT_WRAPPER
-	tristate "Input Multitouch Wrapper"
-	help
-	  This enables support for character device channel for
-	  passing to the input system a multi-touch coordinates.
-
-	  Say Y here if you want to enable the driver.
-
-	  If unsure, say N.
-
+          
 config TOUCHSCREEN_SWEEP2WAKE
         tristate "Sweep2Wake for touchscreens"
         select TOUCHSCREEN_PREVENT_SLEEP
@@ -1089,7 +1034,8 @@ config TOUCHSCREEN_PREVENT_SLEEP
 	bool "Inihibit sleep on modified touchscreen drivers"
 	default n
 	help
-	  This disables the sleep function of modified touchscreen drivers.
+	  This disables the sleep function of modified touchscreen drivers.          
 
+source "drivers/input/touchscreen/gt9xx/Kconfig"
 
 endif

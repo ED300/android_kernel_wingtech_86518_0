@@ -66,11 +66,9 @@ static int ramdump_release(struct inode *inode, struct file *filep)
 }
 
 static unsigned long offset_translate(loff_t user_offset,
-		struct ramdump_device *rd_dev, unsigned long *data_left,
-		void **vaddr)
+		struct ramdump_device *rd_dev, unsigned long *data_left)
 {
 	int i = 0;
-	*vaddr = NULL;
 
 	for (i = 0; i < rd_dev->nsegments; i++)
 		if (user_offset >= rd_dev->segments[i].size)
@@ -91,9 +89,6 @@ static unsigned long offset_translate(loff_t user_offset,
 		rd_dev->name, rd_dev->segments[i].address + user_offset,
 		*data_left);
 
-	if (rd_dev->segments[i].v_address)
-		*vaddr = rd_dev->segments[i].v_address + user_offset;
-
 	return rd_dev->segments[i].address + user_offset;
 }
 
@@ -104,11 +99,10 @@ static ssize_t ramdump_read(struct file *filep, char __user *buf, size_t count,
 {
 	struct ramdump_device *rd_dev = container_of(filep->private_data,
 				struct ramdump_device, device);
-	void *device_mem = NULL, *origdevice_mem = NULL, *vaddr = NULL;
-	unsigned long data_left = 0, bytes_before, bytes_after;
+	void *device_mem = NULL;
+	unsigned long data_left = 0;
 	unsigned long addr = 0;
-	size_t copy_size = 0, alignsize;
-	unsigned char *alignbuf = NULL, *finalbuf = NULL;
+	size_t copy_size = 0;
 	int ret = 0;
 	loff_t orig_pos = *pos;
 
@@ -135,7 +129,7 @@ static ssize_t ramdump_read(struct file *filep, char __user *buf, size_t count,
 	}
 
 	addr = offset_translate(*pos - rd_dev->elfcore_size, rd_dev,
-				&data_left, &vaddr);
+				&data_left);
 
 	/* EOF check */
 	if (data_left == 0) {
@@ -148,8 +142,7 @@ static ssize_t ramdump_read(struct file *filep, char __user *buf, size_t count,
 
 	copy_size = min(count, (size_t)MAX_IOREMAP_SIZE);
 	copy_size = min((unsigned long)copy_size, data_left);
-	device_mem = vaddr ?: ioremap_nocache(addr, copy_size);
-	origdevice_mem = device_mem;
+	device_mem = ioremap_nocache(addr, copy_size);
 
 	if (device_mem == NULL) {
 		pr_err("Ramdump(%s): Unable to ioremap: addr %lx, size %zd\n",
@@ -159,47 +152,16 @@ static ssize_t ramdump_read(struct file *filep, char __user *buf, size_t count,
 		goto ramdump_done;
 	}
 
-	alignbuf = kzalloc(copy_size, GFP_KERNEL);
-	if (!alignbuf) {
-		pr_err("Ramdump(%s): Unable to alloc mem for aligned buf\n",
-				rd_dev->name);
-		rd_dev->ramdump_status = -1;
-		ret = -ENOMEM;
-		goto ramdump_done;
-	}
-
-	finalbuf = alignbuf;
-	alignsize = copy_size;
-
-	if ((unsigned long)device_mem & 0x7) {
-		bytes_before = 8 - ((unsigned long)device_mem & 0x7);
-		memcpy_fromio(alignbuf, device_mem, bytes_before);
-		device_mem += bytes_before;
-		alignbuf += bytes_before;
-		alignsize -= bytes_before;
-	}
-
-	if (alignsize & 0x7) {
-		bytes_after = alignsize & 0x7;
-		memcpy(alignbuf, device_mem, alignsize - bytes_after);
-		device_mem += alignsize - bytes_after;
-		alignbuf += (alignsize - bytes_after);
-		alignsize = bytes_after;
-		memcpy_fromio(alignbuf, device_mem, alignsize);
-	} else
-		memcpy(alignbuf, device_mem, alignsize);
-
-	if (copy_to_user(buf, finalbuf, copy_size)) {
+	if (copy_to_user(buf, device_mem, copy_size)) {
 		pr_err("Ramdump(%s): Couldn't copy all data to user.",
 			rd_dev->name);
+		iounmap(device_mem);
 		rd_dev->ramdump_status = -1;
 		ret = -EFAULT;
 		goto ramdump_done;
 	}
 
-	kfree(finalbuf);
-	if (!vaddr)
-		iounmap(origdevice_mem);
+	iounmap(device_mem);
 	*pos += copy_size;
 
 	pr_debug("Ramdump(%s): Read %zd bytes from address %lx.",
@@ -208,9 +170,6 @@ static ssize_t ramdump_read(struct file *filep, char __user *buf, size_t count,
 	return *pos - orig_pos;
 
 ramdump_done:
-	if (!vaddr)
-		iounmap(origdevice_mem);
-	kfree(finalbuf);
 	rd_dev->data_ready = 0;
 	*pos = 0;
 	complete(&rd_dev->ramdump_complete);

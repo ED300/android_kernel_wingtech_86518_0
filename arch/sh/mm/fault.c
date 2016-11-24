@@ -353,6 +353,8 @@ mm_fault_error(struct pt_regs *regs, unsigned long error_code,
 	} else {
 		if (fault & VM_FAULT_SIGBUS)
 			do_sigbus(regs, error_code, address);
+		else if (fault & VM_FAULT_SIGSEGV)
+			bad_area(regs, error_code, address);
 		else
 			BUG();
 	}
@@ -473,6 +475,11 @@ good_area:
 	}
 
 	set_thread_fault_code(error_code);
+
+	if (user_mode(regs))
+		flags |= FAULT_FLAG_USER;
+	if (error_code & FAULT_CODE_WRITE)
+		flags |= FAULT_FLAG_WRITE;
 
 	if (user_mode(regs))
 		flags |= FAULT_FLAG_USER;

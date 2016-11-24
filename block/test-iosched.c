@@ -477,7 +477,6 @@ int compare_buffer_to_pattern(struct test_request *test_rq)
 
 	return 0;
 }
-EXPORT_SYMBOL(compare_buffer_to_pattern);
 
 /*
  * Determine if the test passed or failed.

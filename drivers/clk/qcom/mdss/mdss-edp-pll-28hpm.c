@@ -307,9 +307,6 @@ static unsigned long edp_vco_get_rate(struct clk *c)
 	u32 pll_status, div2;
 	int rc;
 
-	if (is_gdsc_disabled(edp_pll_res))
-		return 0;
-
 	rc = mdss_pll_resource_enable(edp_pll_res, true);
 	if (rc) {
 		pr_err("edp pll resources not available\n");
@@ -403,9 +400,6 @@ static enum handoff edp_vco_handoff(struct clk *c)
 	struct edp_pll_vco_clk *vco = to_edp_vco_clk(c);
 	struct mdss_pll_resources *edp_pll_res = vco->priv;
 
-	if (is_gdsc_disabled(edp_pll_res))
-		return HANDOFF_DISABLED_CLK;
-
 	if (mdss_pll_resource_enable(edp_pll_res, true)) {
 		pr_err("edp pll resources not available\n");
 		return ret;
@@ -458,7 +452,7 @@ static unsigned long edp_mainlink_get_rate(struct clk *c)
 
 	pclk = clk_get_parent(c);
 
-	if (pclk && pclk->ops->get_rate) {
+	if (pclk->ops->get_rate) {
 		rate = pclk->ops->get_rate(pclk);
 		rate /= mclk->data.div;
 	}
@@ -515,9 +509,6 @@ static int edp_pixel_get_div(struct div_clk *clk)
 	int div = 0;
 	int rc;
 	struct mdss_pll_resources *edp_pll_res = clk->priv;
-
-	if (is_gdsc_disabled(edp_pll_res))
-		return 0;
 
 	rc = mdss_pll_resource_enable(edp_pll_res, true);
 	if (rc) {

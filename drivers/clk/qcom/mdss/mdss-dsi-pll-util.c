@@ -70,9 +70,6 @@ int get_byte_mux_sel(struct mux_clk *clk)
 	int mux_mode, rc;
 	struct mdss_pll_resources *dsi_pll_res = clk->priv;
 
-	if (is_gdsc_disabled(dsi_pll_res))
-		return 0;
-
 	rc = mdss_pll_resource_enable(dsi_pll_res, true);
 	if (rc) {
 		pr_err("Failed to enable mdss dsi pll resources\n");
@@ -150,9 +147,6 @@ int fixed_4div_get_div(struct div_clk *clk)
 	int div = 0, rc;
 	struct mdss_pll_resources *dsi_pll_res = clk->priv;
 
-	if (is_gdsc_disabled(dsi_pll_res))
-		return 0;
-
 	rc = mdss_pll_resource_enable(dsi_pll_res, true);
 	if (rc) {
 		pr_err("Failed to enable mdss dsi pll resources\n");
@@ -189,9 +183,6 @@ int digital_get_div(struct div_clk *clk)
 	int div = 0, rc;
 	struct mdss_pll_resources *dsi_pll_res = clk->priv;
 
-	if (is_gdsc_disabled(dsi_pll_res))
-		return 0;
-
 	rc = mdss_pll_resource_enable(dsi_pll_res, true);
 	if (rc) {
 		pr_err("Failed to enable mdss dsi pll resources\n");
@@ -227,9 +218,6 @@ int analog_get_div(struct div_clk *clk)
 {
 	int div = 0, rc;
 	struct mdss_pll_resources *dsi_pll_res = clk->priv;
-
-	if (is_gdsc_disabled(dsi_pll_res))
-		return 0;
 
 	rc = mdss_pll_resource_enable(clk->priv, true);
 	if (rc) {
@@ -406,9 +394,6 @@ unsigned long vco_get_rate(struct clk *c)
 	int rc;
 	struct mdss_pll_resources *dsi_pll_res = vco->priv;
 
-	if (is_gdsc_disabled(dsi_pll_res))
-		return 0;
-
 	rc = mdss_pll_resource_enable(dsi_pll_res, true);
 	if (rc) {
 		pr_err("Failed to enable mdss dsi pll resources\n");
@@ -524,9 +509,6 @@ enum handoff vco_handoff(struct clk *c)
 	enum handoff ret = HANDOFF_DISABLED_CLK;
 	struct dsi_pll_vco_clk *vco = to_vco_clk(c);
 	struct mdss_pll_resources *dsi_pll_res = vco->priv;
-
-	if (is_gdsc_disabled(dsi_pll_res))
-		return HANDOFF_DISABLED_CLK;
 
 	rc = mdss_pll_resource_enable(dsi_pll_res, true);
 	if (rc) {

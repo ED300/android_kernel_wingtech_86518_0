@@ -48,6 +48,18 @@ static struct gpiomux_setting gpio_uart_config = {
 	.pull = GPIOMUX_PULL_NONE,
 };
 
+static struct gpiomux_setting gpio_spi_config = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_6MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting gpio_spi_cs_config = {
+	.func = GPIOMUX_FUNC_1,
+	.drv = GPIOMUX_DRV_6MA,
+	.pull = GPIOMUX_PULL_DOWN,
+};
+
 static struct gpiomux_setting gpio_smb_stat_int_act_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv  = GPIOMUX_DRV_8MA,
@@ -58,18 +70,6 @@ static struct gpiomux_setting gpio_smb_stat_int_sus_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv  = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_UP,
-};
-
-static struct gpiomux_setting gpio_uart_active_cfg = {
-	.func = GPIOMUX_FUNC_2,
-	.drv  = GPIOMUX_DRV_16MA,
-	.pull = GPIOMUX_PULL_NONE,
-};
-
-static struct gpiomux_setting gpio_uart_suspend_cfg = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_DOWN,
 };
 
 static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
@@ -105,31 +105,27 @@ static struct msm_gpiomux_config msm_blsp_configs[] __initdata = {
 		},
 	},
 	{
-		.gpio      = 4,	/* BLSP1 UART2 TX */
+		.gpio      = 4,		/* BLSP1 QUP2 SPI_DATA_MOSI */
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &gpio_uart_active_cfg,
-			[GPIOMUX_SUSPENDED] = &gpio_uart_suspend_cfg,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_config,
 		},
 	},
 	{
-		.gpio      = 5,  /* BLSP1 UART2 RX */
+		.gpio      = 5,		/* BLSP1 QUP2 SPI_DATA_MISO */
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &gpio_uart_active_cfg,
-			[GPIOMUX_SUSPENDED] = &gpio_uart_suspend_cfg,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_config,
 		},
 	},
 	{
-		.gpio      = 6,  /* BLSP1 UART2 CTS */
+		.gpio      = 6,		/* BLSP1 QUP2 SPI_CS */
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &gpio_uart_active_cfg,
-			[GPIOMUX_SUSPENDED] = &gpio_uart_suspend_cfg,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_cs_config,
 		},
 	},
 	{
-		.gpio      = 7,  /* BLSP1 UART2 RTS */
+		.gpio      = 7,		/* BLSP1 QUP2 SPI_CLK */
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &gpio_uart_active_cfg,
-			[GPIOMUX_SUSPENDED] = &gpio_uart_suspend_cfg,
+			[GPIOMUX_SUSPENDED] = &gpio_spi_config,
 		},
 	},
 };
@@ -146,6 +142,23 @@ static struct msm_gpiomux_config msm_sd_card_configs[] __initdata = {
 		.gpio      = 89,		/* SD CARD VREG EN GPIO */
 		.settings = {
 			[GPIOMUX_SUSPENDED] = &gpio_sd_card_vreg_config,
+		},
+	},
+};
+
+static struct gpiomux_setting wlan_en_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_16MA,
+	.pull = GPIOMUX_PULL_UP,
+	.dir = GPIOMUX_OUT_HIGH,
+};
+
+static struct msm_gpiomux_config msm_wlan_configs[] __initdata = {
+	{
+		.gpio = 70,			/* WLAN ENABLE */
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &wlan_en_cfg,
+			[GPIOMUX_SUSPENDED] = &wlan_en_cfg,
 		},
 	},
 };
@@ -312,5 +325,6 @@ void __init mdm9630_init_gpiomux(void)
 #if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
 	msm_gpiomux_install(msm_eth_config, ARRAY_SIZE(msm_eth_config));
 #endif
+	msm_gpiomux_install(msm_wlan_configs, ARRAY_SIZE(msm_wlan_configs));
 	msm9630_disp_init_gpiomux();
 }

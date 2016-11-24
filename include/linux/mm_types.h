@@ -166,7 +166,6 @@ struct page {
 #ifdef CONFIG_WANT_PAGE_DEBUG_FLAGS
 	unsigned long debug_flags;	/* Use atomic bitops on this */
 #endif
-	struct task_struct *tsk_dirty;	/* task that sets this page dirty */
 
 #ifdef CONFIG_KMEMCHECK
 	/*
@@ -263,10 +262,6 @@ struct vm_area_struct {
 	 * For areas with an address space and backing store,
 	 * linkage into the address_space->i_mmap interval tree, or
 	 * linkage of vma in the address_space->i_mmap_nonlinear list.
-	 *
-	 * For private anonymous mappings, a pointer to a null terminated string
-	 * in the user process containing the name given to the vma, or NULL
-	 * if unnamed.
 	 */
 	union {
 		struct {
@@ -274,7 +269,6 @@ struct vm_area_struct {
 			unsigned long rb_subtree_last;
 		} linear;
 		struct list_head nonlinear;
-		const char __user *anon_name;
 	} shared;
 
 	/*
@@ -515,14 +509,5 @@ static inline void clear_tlb_flush_pending(struct mm_struct *mm)
 {
 }
 #endif
-
-/* Return the name for an anonymous mapping or NULL for a file-backed mapping */
-static inline const char __user *vma_get_anon_name(struct vm_area_struct *vma)
-{
-	if (vma->vm_file)
-		return NULL;
-
-	return vma->shared.anon_name;
-}
 
 #endif /* _LINUX_MM_TYPES_H */

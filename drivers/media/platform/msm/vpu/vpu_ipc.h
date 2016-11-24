@@ -219,8 +219,7 @@ enum vpu_ipc_flush {
  *		as part of acknowledgment message
  * sid:		unique ID associated with a session (only valid for session
  *		event)
- * port_id:	ID of the port (input/output) that command applies to (value
- *		from enum vpu_ipc_channel_port)
+ * port_id:	ID of the port (input/output) that command applies to
  * flags:	bit 0:  indication of need for acknowledgment from FW
  *		bit 1-31: reserved
  */
@@ -239,8 +238,7 @@ struct vpu_ipc_cmd_header_packet {
  * msg_id:	session or System message type
  * status:	return status from FW
  * trans_id:	see vpu_ipc_cmd_header_packet.trans_id
- * port_id:	ID of the port (input/output) that command applies to (value
- *		from enum vpu_ipc_channel_port)
+ * port_id:	ID of the port (input/output) that message applies to
  * sid:		unique ID associated with a session (only valid for session
  *		event)
  */
@@ -433,9 +431,6 @@ struct vpu_ipc_buffer_meta_data_t {
 /* Bits: 26-27 - Number of future buffers */
 #define BUFFER_PKT_FLAG_FUTURE_BUFFER_NUM_MASK      0x0C000000
 #define BUFFER_PKT_FLAG_FUTURE_BUFFER_NUM_SHIFT     26
-/* Bits: 28 - Chroma down sampling */
-#define BUFFER_PKT_FLAG_CDS_ENABLE                  0x10000000
-#define BUFFER_PKT_FLAG_CDS_SHIFT                   28
 
 /*
  * VPU_IPC_CMD_SESSION_SET_BUFFERS, VPU_IPC_CMD_SESSION_PROCESS_BUFFERS

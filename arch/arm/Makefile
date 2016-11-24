@@ -39,6 +39,10 @@ ifeq ($(CONFIG_FRAME_POINTER),y)
 KBUILD_CFLAGS	+=-fno-omit-frame-pointer -mapcs -mno-sched-prolog
 endif
 
+ifeq ($(CONFIG_CC_STACKPROTECTOR),y)
+KBUILD_CFLAGS	+=-fstack-protector
+endif
+
 ifeq ($(CONFIG_CPU_BIG_ENDIAN),y)
 KBUILD_CPPFLAGS	+= -mbig-endian
 AS		+= -EB
@@ -50,6 +54,14 @@ LD		+= -EL
 endif
 
 comma = ,
+
+#
+# The Scalar Replacement of Aggregates (SRA) optimization pass in GCC 4.9 and
+# later may result in code being generated that handles signed short and signed
+# char struct members incorrectly. So disable it.
+# (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65932)
+#
+KBUILD_CFLAGS	+= $(call cc-disable-warning,maybe-uninitialized,)
 
 # This selects which instruction set is used.
 # Note that GCC does not numerically define an architecture version
@@ -255,18 +267,13 @@ core-$(CONFIG_FPE_FASTFPE)	+= $(FASTFPE_OBJ)
 core-$(CONFIG_VFP)		+= arch/arm/vfp/
 core-$(CONFIG_XEN)		+= arch/arm/xen/
 core-$(CONFIG_KVM_ARM_HOST) 	+= arch/arm/kvm/
-core-$(CONFIG_INTELLI_PLUG)	+= arch/arm/hotplug/ALUCARD/
-core-$(CONFIG_INTELLI_PLUG)	+= arch/arm/hotplug/INTELLIPLUG/
-core-$(CONFIG_MSM_HOTPLUG)	+= arch/arm/hotplug/MSMHOTPLUG/
-core-$(CONFIG_MAKO_HOTPLUG)	+= arch/arm/hotplug/MAKO/
-core-$(CONFIG_BRICKED_HOTPLUG)	+= arch/arm/hotplug/BRICKED/
 
 # If we have a machine-specific directory, then include it in the build.
 core-y				+= arch/arm/kernel/ arch/arm/mm/ arch/arm/common/
 core-y				+= arch/arm/net/
 core-y				+= arch/arm/crypto/
 core-y				+= $(machdirs) $(platdirs)
-
+core-y				+= arch/arm/hotplug/
 drivers-$(CONFIG_OPROFILE)      += arch/arm/oprofile/
 
 libs-y				:= arch/arm/lib/ $(libs-y)
@@ -284,8 +291,6 @@ endif
 ifeq ($(CONFIG_USE_OF),y)
 KBUILD_DTBS := dtbs
 endif
-
-DTSSUBDIR := qcom
 
 all:	$(KBUILD_IMAGE) $(KBUILD_DTBS)
 
@@ -308,10 +313,10 @@ zinstall uinstall install: vmlinux
 
 dtbs: scripts
 	$(Q)$(MAKE) $(build)=$(boot)/dts MACHINE=$(MACHINE) dtbs
-	$(foreach DIR, $(DTSSUBDIR), $(Q)$(MAKE) $(build)=$(boot)/dts/$(DIR) MACHINE=$(MACHINE) dtbs)
+	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom MACHINE=$(MACHINE) dtbs
 
 zImage-dtb: vmlinux scripts dtbs
-	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) DTSSUBDIR=$(DTSSUBDIR) $(boot)/$@
+	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) $(boot)/$@
 
 # We use MRPROPER_FILES and CLEAN_FILES now
 archclean:

@@ -88,7 +88,6 @@
 #include <linux/magic.h>
 #include <linux/slab.h>
 #include <linux/xattr.h>
-#include <linux/qmp_sphinx_instrumentation.h>
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -1527,14 +1526,9 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 						      (struct sockaddr *)
 						      &address, addrlen);
 		}
-		if (!err) {
-			if (sock->sk)
-				sock_hold(sock->sk);
-			sockev_notify(SOCKEV_BIND, sock);
-			if (sock->sk)
-				sock_put(sock->sk);
-		}
 		fput_light(sock->file, fput_needed);
+		if (!err)
+			sockev_notify(SOCKEV_BIND, sock);
 	}
 	return err;
 }
@@ -1561,14 +1555,9 @@ SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 		if (!err)
 			err = sock->ops->listen(sock, backlog);
 
-		if (!err) {
-			if (sock->sk)
-				sock_hold(sock->sk);
-			sockev_notify(SOCKEV_LISTEN, sock);
-			if (sock->sk)
-				sock_put(sock->sk);
-		}
 		fput_light(sock->file, fput_needed);
+		if (!err)
+			sockev_notify(SOCKEV_LISTEN, sock);
 	}
 	return err;
 }
@@ -1793,8 +1782,6 @@ SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
 	struct iovec iov;
 	int fput_needed;
 
-	qmp_sphinx_logk_sendto(fd, buff, len, flags, addr, addr_len);
-
 	if (len > INT_MAX)
 		len = INT_MAX;
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
@@ -1853,8 +1840,6 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 	struct sockaddr_storage address;
 	int err, err2;
 	int fput_needed;
-
-	qmp_sphinx_logk_recvfrom(fd, ubuf, size, flags, addr, addr_len);
 
 	if (size > INT_MAX)
 		size = INT_MAX;
@@ -2024,14 +2009,12 @@ static int ___sys_sendmsg(struct socket *sock, struct msghdr __user *msg,
 	int err, ctl_len, total_len;
 
 	err = -EFAULT;
-	if (MSG_CMSG_COMPAT & flags) {
-		if (get_compat_msghdr(msg_sys, msg_compat))
-			return -EFAULT;
-	} else {
+	if (MSG_CMSG_COMPAT & flags)
+		err = get_compat_msghdr(msg_sys, msg_compat);
+	else
 		err = copy_msghdr_from_user(msg_sys, msg);
-		if (err)
-			return err;
-	}
+	if (err)
+		return err;
 
 	if (msg_sys->msg_iovlen > UIO_FASTIOV) {
 		err = -EMSGSIZE;
@@ -2236,14 +2219,12 @@ static int ___sys_recvmsg(struct socket *sock, struct msghdr __user *msg,
 	struct sockaddr __user *uaddr;
 	int __user *uaddr_len;
 
-	if (MSG_CMSG_COMPAT & flags) {
-		if (get_compat_msghdr(msg_sys, msg_compat))
-			return -EFAULT;
-	} else {
+	if (MSG_CMSG_COMPAT & flags)
+		err = get_compat_msghdr(msg_sys, msg_compat);
+	else
 		err = copy_msghdr_from_user(msg_sys, msg);
-		if (err)
-			return err;
-	}
+	if (err)
+		return err;
 
 	if (msg_sys->msg_iovlen > UIO_FASTIOV) {
 		err = -EMSGSIZE;

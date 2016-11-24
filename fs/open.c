@@ -674,7 +674,6 @@ static int do_dentry_open(struct file *f,
 	}
 
 	f->f_mapping = inode->i_mapping;
-	file_sb_list_add(f, inode->i_sb);
 
 	if (unlikely(f->f_mode & FMODE_PATH)) {
 		f->f_op = &empty_fops;
@@ -709,7 +708,6 @@ static int do_dentry_open(struct file *f,
 
 cleanup_all:
 	fops_put(f->f_op);
-	file_sb_list_del(f);
 	if (f->f_mode & FMODE_WRITE) {
 		if (!special_file(inode->i_mode)) {
 			/*
@@ -991,7 +989,6 @@ int filp_close(struct file *filp, fl_owner_t id)
 		dnotify_flush(filp, id);
 		locks_remove_posix(filp, id);
 	}
-	security_file_close(filp);
 	fput(filp);
 	return retval;
 }

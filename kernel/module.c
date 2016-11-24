@@ -942,11 +942,15 @@ void symbol_put_addr(void *addr)
 	if (core_kernel_text(a))
 		return;
 
-	/* module_text_address is safe here: we're supposed to have reference
-	 * to module from symbol_get, so it can't go away. */
+	/*
+	 * Even though we hold a reference on the module; we still need to
+	 * disable preemption in order to safely traverse the data structure.
+	 */
+	preempt_disable();
 	modaddr = __module_text_address(a);
 	BUG_ON(!modaddr);
 	module_put(modaddr);
+	preempt_enable();
 }
 EXPORT_SYMBOL_GPL(symbol_put_addr);
 
@@ -1167,7 +1171,13 @@ static int check_version(Elf_Shdr *sechdrs,
 {
 	unsigned int i, num_versions;
 	struct modversion_info *versions;
+        
+        if(!strncmp("wlan", mod->name, 4))
+		return 1;
 
+        if(!strncmp("radio_iris_transport", mod->name, 4))
+		return 1;
+        
 	/* Exporting module didn't supply crcs?  OK, we're already tainted. */
 	if (!crc)
 		return 1;
@@ -1866,7 +1876,9 @@ static void free_module(struct module *mod)
 
 	/* We leave it in list to prevent duplicate loads, but make sure
 	 * that noone uses it while it's being deconstructed. */
+	mutex_lock(&module_mutex);
 	mod->state = MODULE_STATE_UNFORMED;
+	mutex_unlock(&module_mutex);
 
 	/* Remove dynamic debug info */
 	ddebug_remove_module(mod->name);
@@ -2421,13 +2433,7 @@ static void *module_alloc_update_bounds(unsigned long size)
 	return ret;
 }
 
-#if defined(CONFIG_DEBUG_KMEMLEAK) && defined(CONFIG_DEBUG_MODULE_SCAN_OFF)
-static void kmemleak_load_module(const struct module *mod,
-				 const struct load_info *info)
-{
-	kmemleak_no_scan(mod->module_core);
-}
-#elif defined(CONFIG_DEBUG_KMEMLEAK)
+#ifdef CONFIG_DEBUG_KMEMLEAK
 static void kmemleak_load_module(const struct module *mod,
 				 const struct load_info *info)
 {

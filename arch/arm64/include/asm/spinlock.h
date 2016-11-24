@@ -132,7 +132,7 @@ static inline void arch_write_lock(arch_rwlock_t *rw)
 	"	cbnz	%w0, 2b\n"
 	: "=&r" (tmp), "+Q" (rw->lock)
 	: "r" (0x80000000)
-	: "memory");
+	: "cc", "memory");
 }
 
 static inline int arch_write_trylock(arch_rwlock_t *rw)
@@ -140,14 +140,13 @@ static inline int arch_write_trylock(arch_rwlock_t *rw)
 	unsigned int tmp;
 
 	asm volatile(
-	"2:	ldaxr	%w0, %1\n"
+	"	ldaxr	%w0, %1\n"
 	"	cbnz	%w0, 1f\n"
 	"	stxr	%w0, %w2, %1\n"
-	"	cbnz	%w0, 2b\n"
 	"1:\n"
 	: "=&r" (tmp), "+Q" (rw->lock)
 	: "r" (0x80000000)
-	: "memory");
+	: "cc", "memory");
 
 	return !tmp;
 }
@@ -188,7 +187,7 @@ static inline void arch_read_lock(arch_rwlock_t *rw)
 	"	cbnz	%w1, 2b\n"
 	: "=&r" (tmp), "=&r" (tmp2), "+Q" (rw->lock)
 	:
-	: "memory");
+	: "cc", "memory");
 }
 
 static inline void arch_read_unlock(arch_rwlock_t *rw)
@@ -202,7 +201,7 @@ static inline void arch_read_unlock(arch_rwlock_t *rw)
 	"	cbnz	%w1, 1b\n"
 	: "=&r" (tmp), "=&r" (tmp2), "+Q" (rw->lock)
 	:
-	: "memory");
+	: "cc", "memory");
 }
 
 static inline int arch_read_trylock(arch_rwlock_t *rw)
@@ -210,15 +209,14 @@ static inline int arch_read_trylock(arch_rwlock_t *rw)
 	unsigned int tmp, tmp2 = 1;
 
 	asm volatile(
-	"2:	ldaxr	%w0, %2\n"
+	"	ldaxr	%w0, %2\n"
 	"	add	%w0, %w0, #1\n"
 	"	tbnz	%w0, #31, 1f\n"
 	"	stxr	%w1, %w0, %2\n"
-	"	cbnz	%w1, 2b\n"
 	"1:\n"
 	: "=&r" (tmp), "+r" (tmp2), "+Q" (rw->lock)
 	:
-	: "memory");
+	: "cc", "memory");
 
 	return !tmp2;
 }

@@ -15,7 +15,6 @@
 
 #include <linux/workqueue.h>
 #include <linux/leds.h>
-#include <linux/types.h>
 
 struct device;
 
@@ -110,7 +109,6 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_INPUT_CURRENT_MAX,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_TRIM,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED,
-	POWER_SUPPLY_PROP_VCHG_LOOP_DBC_BYPASS,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CURRENT_AVG,
 	POWER_SUPPLY_PROP_POWER_NOW,
@@ -158,16 +156,10 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
 	POWER_SUPPLY_PROP_RESISTANCE,
 	POWER_SUPPLY_PROP_RESISTANCE_CAPACITIVE,
-	/* unit is in ohms due to ID being typically in kohm range */
-	POWER_SUPPLY_PROP_RESISTANCE_ID,
-	POWER_SUPPLY_PROP_RESISTANCE_NOW,
 	/* Local extensions */
 	POWER_SUPPLY_PROP_USB_HC,
 	POWER_SUPPLY_PROP_USB_OTG,
 	POWER_SUPPLY_PROP_CHARGE_ENABLED,
-	POWER_SUPPLY_PROP_FLASH_CURRENT_MAX,
-	/* Local extensions of type int64_t */
-	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
@@ -192,7 +184,6 @@ enum power_supply_type {
 union power_supply_propval {
 	int intval;
 	const char *strval;
-	int64_t int64val;
 };
 
 struct power_supply {
@@ -235,10 +226,6 @@ struct power_supply {
 #endif
 
 #ifdef CONFIG_LEDS_TRIGGERS
-	struct led_trigger *charging_red_trig;
-	char *charging_red_trig_name;
-	struct led_trigger *charging_green_trig;
-	char *charging_green_trig_name;
 	struct led_trigger *charging_full_trig;
 	char *charging_full_trig_name;
 	struct led_trigger *charging_trig;
@@ -277,7 +264,6 @@ extern void power_supply_changed(struct power_supply *psy);
 extern int power_supply_am_i_supplied(struct power_supply *psy);
 extern int power_supply_set_battery_charged(struct power_supply *psy);
 extern int power_supply_set_current_limit(struct power_supply *psy, int limit);
-extern int power_supply_set_voltage_limit(struct power_supply *psy, int limit);
 extern int power_supply_set_online(struct power_supply *psy, bool enable);
 extern int power_supply_set_health_state(struct power_supply *psy, int health);
 extern int power_supply_set_present(struct power_supply *psy, bool enable);
@@ -301,9 +287,6 @@ static inline void power_supply_changed(struct power_supply *psy) { }
 static inline int power_supply_am_i_supplied(struct power_supply *psy)
 							{ return -ENOSYS; }
 static inline int power_supply_set_battery_charged(struct power_supply *psy)
-							{ return -ENOSYS; }
-static inline int power_supply_set_voltage_limit(struct power_supply *psy,
-							int limit)
 							{ return -ENOSYS; }
 static inline int power_supply_set_current_limit(struct power_supply *psy,
 							int limit)
@@ -364,7 +347,6 @@ static inline bool power_supply_is_amp_property(enum power_supply_property psp)
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 	case POWER_SUPPLY_PROP_CURRENT_AVG:
-	case POWER_SUPPLY_PROP_FLASH_CURRENT_MAX:
 		return 1;
 	default:
 		break;

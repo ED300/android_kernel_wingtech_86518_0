@@ -76,13 +76,6 @@ enum {
 	MSM_FRONTEND_DAI_MULTIMEDIA7,
 	MSM_FRONTEND_DAI_MULTIMEDIA8,
 	MSM_FRONTEND_DAI_MULTIMEDIA9,
-	MSM_FRONTEND_DAI_MULTIMEDIA10,
-	MSM_FRONTEND_DAI_MULTIMEDIA11,
-	MSM_FRONTEND_DAI_MULTIMEDIA12,
-	MSM_FRONTEND_DAI_MULTIMEDIA13,
-	MSM_FRONTEND_DAI_MULTIMEDIA14,
-	MSM_FRONTEND_DAI_MULTIMEDIA15,
-	MSM_FRONTEND_DAI_MULTIMEDIA16,
 	MSM_FRONTEND_DAI_CS_VOICE,
 	MSM_FRONTEND_DAI_VOIP,
 	MSM_FRONTEND_DAI_AFE_RX,
@@ -106,8 +99,8 @@ enum {
 	MSM_FRONTEND_DAI_MAX,
 };
 
-#define MSM_FRONTEND_DAI_MM_SIZE (MSM_FRONTEND_DAI_MULTIMEDIA16 + 1)
-#define MSM_FRONTEND_DAI_MM_MAX_ID MSM_FRONTEND_DAI_MULTIMEDIA16
+#define MSM_FRONTEND_DAI_MM_SIZE (MSM_FRONTEND_DAI_MULTIMEDIA9 + 1)
+#define MSM_FRONTEND_DAI_MM_MAX_ID MSM_FRONTEND_DAI_MULTIMEDIA9
 
 enum {
 	MSM_BACKEND_DAI_PRI_I2S_RX = 0,
@@ -172,14 +165,6 @@ enum msm_pcm_routing_event {
 
 #define RELEASE_LOCK	0
 #define ACQUIRE_LOCK	1
-
-#define MSM_BACKEND_DAI_PP_PARAMS_REQ_MAX	1
-#define HDMI_RX_ID				0x8001
-#define ADM_PP_PARAM_MUTE_ID			0
-#define ADM_PP_PARAM_MUTE_BIT			1
-#define ADM_PP_PARAM_LATENCY_ID			1
-#define ADM_PP_PARAM_LATENCY_BIT		2
-
 struct msm_pcm_routing_evt {
 	void (*event_func)(enum msm_pcm_routing_event, void *);
 	void *priv_data;
@@ -196,58 +181,42 @@ struct msm_pcm_routing_bdai_data {
 	unsigned int  sample_rate;
 	unsigned int  channel;
 	unsigned int  format;
-	u32 compr_passthr_mode;
-	char *name;
 };
 
 struct msm_pcm_routing_fdai_data {
 	u16 be_srate; /* track prior backend sample rate for flushing purpose */
 	int strm_id; /* ASM stream ID */
-	int perf_mode;
 	struct msm_pcm_routing_evt event_info;
-};
-
-#define MAX_APP_TYPES	16
-struct msm_pcm_routing_app_type_data {
-	int app_type;
-	u32 sample_rate;
-	int bit_width;
-};
-
-struct msm_pcm_stream_app_type_cfg {
-	int app_type;
-	int acdb_dev_id;
-	int sample_rate;
 };
 
 /* dai_id: front-end ID,
  * dspst_id:  DSP audio stream ID
  * stream_type: playback or capture
  */
-int msm_pcm_routing_reg_phy_stream(int fedai_id, int perf_mode, int dspst_id,
-				   int stream_type);
+void msm_pcm_routing_reg_phy_stream(int fedai_id, int perf_mode, int dspst_id,
+	int stream_type);
 void msm_pcm_routing_reg_psthr_stream(int fedai_id, int dspst_id,
 		int stream_type);
-int msm_pcm_routing_reg_phy_compr_stream(int fedai_id, bool perf_mode,
-					  int dspst_id, int stream_type,
-					  uint32_t compr_passthr);
 
-int msm_pcm_routing_reg_phy_stream_v2(int fedai_id, bool perf_mode,
-				      int dspst_id, int stream_type,
-				      struct msm_pcm_routing_evt event_info);
+void msm_pcm_routing_reg_phy_stream_v2(int fedai_id, bool perf_mode,
+				       int dspst_id, int stream_type,
+				       struct msm_pcm_routing_evt event_info);
 
 void msm_pcm_routing_dereg_phy_stream(int fedai_id, int stream_type);
 
 int msm_routing_check_backend_enabled(int fedai_id);
 
+int multi_ch_pcm_set_volume(unsigned volume);
+
+uint32_t get_adm_rx_topology(void);
+
+uint32_t get_adm_tx_topology(void);
 
 void msm_pcm_routing_get_bedai_info(int be_idx,
 				    struct msm_pcm_routing_bdai_data *bedai);
 void msm_pcm_routing_get_fedai_info(int fe_idx, int sess_type,
-				    struct msm_pcm_routing_fdai_data *fe_dai);
+				    struct msm_pcm_routing_fdai_data *fe_dai,
+				    int *fe_perf_mode);
 void msm_pcm_routing_acquire_lock(void);
 void msm_pcm_routing_release_lock(void);
-
-void msm_pcm_routing_reg_stream_app_type_cfg(int fedai_id, int app_type,
-					int acdb_dev_id, int sample_rate);
 #endif /*_MSM_PCM_H*/

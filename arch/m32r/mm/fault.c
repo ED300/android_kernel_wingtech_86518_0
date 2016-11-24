@@ -120,6 +120,9 @@ asmlinkage void do_page_fault(struct pt_regs *regs, unsigned long error_code,
 	if (error_code & ACE_USERMODE)
 		flags |= FAULT_FLAG_USER;
 
+	if (error_code & ACE_USERMODE)
+		flags |= FAULT_FLAG_USER;
+
 	/* When running in the kernel we expect faults to occur only to
 	 * addresses in user space.  All other faults represent errors in the
 	 * kernel and should generate an OOPS.  Unfortunately, in the case of an
@@ -200,6 +203,8 @@ good_area:
 	if (unlikely(fault & VM_FAULT_ERROR)) {
 		if (fault & VM_FAULT_OOM)
 			goto out_of_memory;
+		else if (fault & VM_FAULT_SIGSEGV)
+			goto bad_area;
 		else if (fault & VM_FAULT_SIGBUS)
 			goto do_sigbus;
 		BUG();

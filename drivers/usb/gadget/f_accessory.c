@@ -305,10 +305,8 @@ static void acc_complete_in(struct usb_ep *ep, struct usb_request *req)
 {
 	struct acc_dev *dev = _acc_dev;
 
-	if (req->status == -ESHUTDOWN) {
-		pr_debug("acc_complete_in set disconnected");
+	if (req->status != 0)
 		acc_set_disconnected(dev);
-	}
 
 	req_put(dev, &dev->tx_idle, req);
 
@@ -320,10 +318,8 @@ static void acc_complete_out(struct usb_ep *ep, struct usb_request *req)
 	struct acc_dev *dev = _acc_dev;
 
 	dev->rx_done = 1;
-	if (req->status == -ESHUTDOWN) {
-		pr_debug("acc_complete_out set disconnected");
+	if (req->status != 0)
 		acc_set_disconnected(dev);
-	}
 
 	wake_up(&dev->read_wq);
 }
@@ -600,17 +596,13 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 {
 	struct acc_dev *dev = fp->private_data;
 	struct usb_request *req;
-	ssize_t r = count;
-	unsigned xfer;
-	int len;
+	int r = count, xfer, len;
 	int ret = 0;
 
-	pr_debug("acc_read(%zu)\n", count);
+	pr_debug("acc_read(%zd)\n", count);
 
-	if (dev->disconnected) {
-		pr_debug("acc_read disconnected");
+	if (dev->disconnected)
 		return -ENODEV;
-	}
 
 	if (count > BULK_BUFFER_SIZE)
 		count = BULK_BUFFER_SIZE;
@@ -623,12 +615,6 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 	if (ret < 0) {
 		r = ret;
 		goto done;
-	}
-
-	if (dev->rx_done) {
-		// last req cancelled. try to get it.
-		req = dev->rx_req[0];
-		goto copy_data;
 	}
 
 requeue_req:
@@ -648,23 +634,15 @@ requeue_req:
 	ret = wait_event_interruptible(dev->read_wq, dev->rx_done);
 	if (ret < 0) {
 		r = ret;
-		ret = usb_ep_dequeue(dev->ep_out, req);
-		if (ret != 0) {
-			// cancel failed. There can be a data already received.
-			// it will be retrieved in the next read.
-			pr_debug("acc_read: cancelling failed %d", ret);
-		}
+		usb_ep_dequeue(dev->ep_out, req);
 		goto done;
 	}
-
-copy_data:
-	dev->rx_done = 0;
 	if (dev->online) {
 		/* If we got a 0-len packet, throw it back and try again. */
 		if (req->actual == 0)
 			goto requeue_req;
 
-		pr_debug("rx %p %u\n", req, req->actual);
+		pr_debug("rx %p %d\n", req, req->actual);
 		xfer = (req->actual < count) ? req->actual : count;
 		r = xfer;
 		if (copy_to_user(buf, req->buf, xfer))
@@ -673,7 +651,7 @@ copy_data:
 		r = -EIO;
 
 done:
-	pr_debug("acc_read returning %zd\n", r);
+	pr_debug("acc_read returning %d\n", r);
 	return r;
 }
 
@@ -682,16 +660,13 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 {
 	struct acc_dev *dev = fp->private_data;
 	struct usb_request *req = 0;
-	ssize_t r = count;
-	unsigned xfer;
+	int r = count, xfer;
 	int ret;
 
-	pr_debug("acc_write(%zu)\n", count);
+	pr_debug("acc_write(%zd)\n", count);
 
-	if (!dev->online || dev->disconnected) {
-		pr_debug("acc_write disconnected or not online");
+	if (!dev->online || dev->disconnected)
 		return -ENODEV;
-	}
 
 	while (count > 0) {
 		if (!dev->online) {
@@ -736,7 +711,7 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 	if (req)
 		req_put(dev, &dev->tx_idle, req);
 
-	pr_debug("acc_write returning %zd\n", r);
+	pr_debug("acc_write returning %d\n", r);
 	return r;
 }
 
@@ -805,9 +780,6 @@ static const struct file_operations acc_fops = {
 	.read = acc_read,
 	.write = acc_write,
 	.unlocked_ioctl = acc_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = acc_ioctl,
-#endif
 	.open = acc_open,
 	.release = acc_release,
 };

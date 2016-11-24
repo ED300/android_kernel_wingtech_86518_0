@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,7 +26,6 @@
 #include <linux/clk.h>
 #include <linux/bitmap.h>
 #include <linux/of.h>
-#include <linux/sched.h>
 #include <linux/of_coresight.h>
 #include <linux/coresight.h>
 #include <linux/coresight-stm.h>
@@ -36,6 +35,10 @@
 
 #define stm_writel(drvdata, val, off)	__raw_writel((val), drvdata->base + off)
 #define stm_readl(drvdata, off)		__raw_readl(drvdata->base + off)
+
+#define stm_data_writeb(val, addr)	__raw_writeb_no_log(val, addr)
+#define stm_data_writew(val, addr)	__raw_writew_no_log(val, addr)
+#define stm_data_writel(val, addr)	__raw_writel_no_log(val, addr)
 
 #define STM_LOCK(drvdata)						\
 do {									\
@@ -92,9 +95,6 @@ do {									\
 #define OST_VERSION_PROP		(1)
 #define OST_VERSION_MIPI1		(16)
 
-#define STM_MAKE_VERSION(ma, mi)	((ma << 8) | mi)
-#define STM_HEADER_MAGIC		(0x5953)
-
 enum stm_pkt_type {
 	STM_PKT_TYPE_DATA	= 0x98,
 	STM_PKT_TYPE_FLAG	= 0xE8,
@@ -141,45 +141,19 @@ struct stm_drvdata {
 	bool			enable;
 	DECLARE_BITMAP(entities, OST_ENTITY_MAX);
 	bool			write_64bit;
-	bool			data_barrier;
 };
 
 static struct stm_drvdata *stmdrvdata;
 
-static inline void stm_data_writeb(uint8_t val, void *addr)
-{
-	__raw_writeb_no_log(val, addr);
-	if (stmdrvdata->data_barrier)
-		/* Helps avoid large number of outstanding writes */
-		mb();
-}
-
-static inline void stm_data_writew(uint16_t val, void *addr)
-{
-	__raw_writew_no_log(val, addr);
-	if (stmdrvdata->data_barrier)
-		/* Helps avoid large number of outstanding writes */
-		mb();
-}
-
-static inline void stm_data_writel(uint32_t val, void *addr)
-{
-	__raw_writel_no_log(val, addr);
-	if (stmdrvdata->data_barrier)
-		/* Helps avoid large number of outstanding writes */
-		mb();
-}
-
 static int stm_hwevent_isenable(struct stm_drvdata *drvdata)
 {
 	int ret = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	if (drvdata->enable)
 		if (BVAL(stm_readl(drvdata, STMHEMCR), 0))
 			ret = stm_readl(drvdata, STMHEER) == 0 ? 0 : 1;
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 
 	return ret;
 }
@@ -201,14 +175,13 @@ static void __stm_hwevent_enable(struct stm_drvdata *drvdata)
 static int stm_hwevent_enable(struct stm_drvdata *drvdata)
 {
 	int ret = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	if (drvdata->enable)
 		__stm_hwevent_enable(drvdata);
 	else
 		ret = -EINVAL;
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 
 	return ret;
 }
@@ -216,12 +189,11 @@ static int stm_hwevent_enable(struct stm_drvdata *drvdata)
 static int stm_port_isenable(struct stm_drvdata *drvdata)
 {
 	int ret = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	if (drvdata->enable)
 		ret = stm_readl(drvdata, STMSPER) == 0 ? 0 : 1;
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 
 	return ret;
 }
@@ -239,14 +211,13 @@ static void __stm_port_enable(struct stm_drvdata *drvdata)
 static int stm_port_enable(struct stm_drvdata *drvdata)
 {
 	int ret = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	if (drvdata->enable)
 		__stm_port_enable(drvdata);
 	else
 		ret = -EINVAL;
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 
 	return ret;
 }
@@ -269,16 +240,15 @@ static int stm_enable(struct coresight_device *csdev)
 {
 	struct stm_drvdata *drvdata = dev_get_drvdata(csdev->dev.parent);
 	int ret;
-	unsigned long flags;
 
 	ret = clk_prepare_enable(drvdata->clk);
 	if (ret)
 		return ret;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	__stm_enable(drvdata);
 	drvdata->enable = true;
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 
 	dev_info(drvdata->dev, "STM tracing enabled\n");
 	return 0;
@@ -297,12 +267,10 @@ static void __stm_hwevent_disable(struct stm_drvdata *drvdata)
 
 static void stm_hwevent_disable(struct stm_drvdata *drvdata)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	if (drvdata->enable)
 		__stm_hwevent_disable(drvdata);
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 }
 
 static void __stm_port_disable(struct stm_drvdata *drvdata)
@@ -317,12 +285,10 @@ static void __stm_port_disable(struct stm_drvdata *drvdata)
 
 static void stm_port_disable(struct stm_drvdata *drvdata)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	if (drvdata->enable)
 		__stm_port_disable(drvdata);
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 }
 
 static void __stm_disable(struct stm_drvdata *drvdata)
@@ -340,12 +306,11 @@ static void __stm_disable(struct stm_drvdata *drvdata)
 static void stm_disable(struct coresight_device *csdev)
 {
 	struct stm_drvdata *drvdata = dev_get_drvdata(csdev->dev.parent);
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
+	spin_lock(&drvdata->spinlock);
 	__stm_disable(drvdata);
 	drvdata->enable = false;
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+	spin_unlock(&drvdata->spinlock);
 
 	/* Wait for 100ms so that pending data has been written to HW */
 	msleep(100);
@@ -368,15 +333,12 @@ static uint32_t stm_channel_alloc(uint32_t off)
 {
 	struct stm_drvdata *drvdata = stmdrvdata;
 	uint32_t ch;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
 	do {
 		ch = find_next_zero_bit(drvdata->chs.bitmap,
 					NR_STM_CHANNEL, off);
 	} while ((ch < NR_STM_CHANNEL) &&
 		 test_and_set_bit(ch, drvdata->chs.bitmap));
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
 
 	return ch;
 }
@@ -384,11 +346,8 @@ static uint32_t stm_channel_alloc(uint32_t off)
 static void stm_channel_free(uint32_t ch)
 {
 	struct stm_drvdata *drvdata = stmdrvdata;
-	unsigned long flags;
 
-	spin_lock_irqsave(&drvdata->spinlock, flags);
 	clear_bit(ch, drvdata->chs.bitmap);
-	spin_unlock_irqrestore(&drvdata->spinlock, flags);
 }
 
 static int stm_send_64bit(void *addr, const void *data, uint32_t size)
@@ -526,7 +485,8 @@ static int stm_send(void *addr, const void *data, uint32_t size)
 }
 
 static int stm_trace_ost_header(unsigned long ch_addr, uint32_t options,
-				uint8_t entity_id, uint8_t proto_id)
+				uint8_t entity_id, uint8_t proto_id,
+				const void *payload_data, uint32_t payload_size)
 {
 	void *addr;
 	uint32_t header;
@@ -547,37 +507,15 @@ static int stm_trace_ost_header(unsigned long ch_addr, uint32_t options,
 	return stm_send(addr, &header, sizeof(header));
 }
 
-static int stm_trace_data_header(void *addr)
-{
-	char hdr[16];
-	int len = 0;
-
-	*(uint16_t *)(hdr) = STM_MAKE_VERSION(0, 1);
-	*(uint16_t *)(hdr + 2) = STM_HEADER_MAGIC;
-	*(uint32_t *)(hdr + 4) = raw_smp_processor_id();
-	*(uint64_t *)(hdr + 8) = sched_clock();
-
-	len += stm_send(addr, hdr, sizeof(hdr));
-	len += stm_send(addr, current->comm, TASK_COMM_LEN);
-
-	return len;
-}
-
 static int stm_trace_data(unsigned long ch_addr, uint32_t options,
 			  const void *data, uint32_t size)
 {
 	void *addr;
-	int len = 0;
 
 	options &= ~STM_OPTION_TIMESTAMPED;
 	addr = (void *)(ch_addr | stm_channel_off(STM_PKT_TYPE_DATA, options));
 
-	/* send the data header */
-	len += stm_trace_data_header(addr);
-	/* send the actual data */
-	len += stm_send(addr, data, size);
-
-	return len;
+	return stm_send(addr, data, size);
 }
 
 static int stm_trace_ost_tail(unsigned long ch_addr, uint32_t options)
@@ -615,7 +553,7 @@ static inline int __stm_trace(uint32_t options, uint8_t entity_id,
 	} else {
 		/* send the ost header */
 		len += stm_trace_ost_header(ch_addr, options, entity_id,
-					    proto_id);
+					    proto_id, data, size);
 
 		/* send the payload data */
 		len += stm_trace_data(ch_addr, options, data, size);
@@ -914,12 +852,9 @@ static int stm_probe(struct platform_device *pdev)
 
 	bitmap_fill(drvdata->entities, OST_ENTITY_MAX);
 
-	if (pdev->dev.of_node) {
+	if (pdev->dev.of_node)
 		drvdata->write_64bit = of_property_read_bool(pdev->dev.of_node,
 							"qcom,write-64bit");
-		drvdata->data_barrier = of_property_read_bool(pdev->dev.of_node,
-							"qcom,data-barrier");
-	}
 
 	desc = devm_kzalloc(dev, sizeof(*desc), GFP_KERNEL);
 	if (!desc)

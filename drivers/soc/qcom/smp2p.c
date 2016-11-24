@@ -210,7 +210,6 @@ static struct smp2p_version_if version_if[] = {
 static struct smp2p_interrupt_config smp2p_int_cfgs[SMP2P_NUM_PROCS] = {
 	[SMP2P_MODEM_PROC].name = "modem",
 	[SMP2P_AUDIO_PROC].name = "lpass",
-	[SMP2P_SENSOR_PROC].name = "dsps",
 	[SMP2P_WIRELESS_PROC].name = "wcnss",
 	[SMP2P_REMOTE_MOCK_PROC].name = "mock",
 };
@@ -323,9 +322,6 @@ static int smp2p_get_smem_item_id(int write_pid, int read_pid)
 		break;
 	case SMP2P_AUDIO_PROC:
 		ret = SMEM_SMP2P_AUDIO_BASE + read_pid;
-		break;
-	case SMP2P_SENSOR_PROC:
-		ret = SMEM_SMP2P_SENSOR_BASE + read_pid;
 		break;
 	case SMP2P_WIRELESS_PROC:
 		ret = SMEM_SMP2P_WIRLESS_BASE + read_pid;
@@ -510,7 +506,6 @@ static void smp2p_find_entry_v1(struct smp2p_smem __iomem *item,
 {
 	int i;
 	struct smp2p_entry_v1 *pos;
-	char entry_name[SMP2P_MAX_ENTRY_NAME];
 
 	if (!item || !name || !entry_ptr) {
 		SMP2P_ERR("%s: invalid arguments %p, %p, %p\n",
@@ -524,9 +519,8 @@ static void smp2p_find_entry_v1(struct smp2p_smem __iomem *item,
 
 	pos = (struct smp2p_entry_v1 *)(char *)(item + 1);
 	for (i = 0; i < entries_total; i++, ++pos) {
-		memcpy_fromio(entry_name, pos->name, SMP2P_MAX_ENTRY_NAME);
-		if (entry_name[0]) {
-			if (!strcmp(entry_name, name)) {
+		if (pos->name[0]) {
+			if (!strncmp(pos->name, name, SMP2P_MAX_ENTRY_NAME)) {
 				*entry_ptr = &pos->entry;
 				break;
 			}
@@ -1921,7 +1915,7 @@ static int __init msm_smp2p_init(void)
 		in_list[i].smem_edge_in = NULL;
 	}
 
-	log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smp2p", 0);
+	log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smp2p");
 	if (!log_ctx)
 		SMP2P_ERR("%s: unable to create log context\n", __func__);
 

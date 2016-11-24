@@ -19,11 +19,10 @@
 #define QCEBAM_BURST_SIZE	MAX_CE_BAM_BURST_SIZE
 
 #define GET_VIRT_ADDR(x)  \
-		((uintptr_t)pce_dev->coh_vmem +			\
-		((uintptr_t)x - (uintptr_t)pce_dev->coh_pmem))
+		((uint32_t)pce_dev->coh_vmem +			\
+		((uint32_t)x - (uint32_t)pce_dev->coh_pmem))
 #define GET_PHYS_ADDR(x)  \
-		((uintptr_t)pce_dev->coh_pmem +			\
-		((uintptr_t)x - (uintptr_t)pce_dev->coh_vmem))
+		(pce_dev->coh_pmem + (x - (uint32_t)pce_dev->coh_vmem))
 
 #define CRYPTO_REG_SIZE 4
 #define NUM_OF_CRYPTO_AUTH_IV_REG 16
@@ -63,7 +62,7 @@ struct ce_result_dump_format {
 
 struct qce_cmdlist_info {
 
-	unsigned long cmdlist;
+	uint32_t cmdlist;
 	struct sps_command_element *crypto_cfg;
 	struct sps_command_element *encr_seg_cfg;
 	struct sps_command_element *encr_seg_size;
@@ -84,7 +83,7 @@ struct qce_cmdlist_info {
 	struct sps_command_element *auth_bytecount;
 	struct sps_command_element *seg_size;
 	struct sps_command_element *go_proc;
-	ptrdiff_t size;
+	uint32_t size;
 };
 
 struct qce_cmdlistptr_ops {
@@ -108,10 +107,10 @@ struct qce_cmdlistptr_ops {
 	struct qce_cmdlist_info aead_hmac_sha1_cbc_aes_256;
 	struct qce_cmdlist_info aead_hmac_sha1_cbc_des;
 	struct qce_cmdlist_info aead_hmac_sha1_cbc_3des;
-	struct qce_cmdlist_info aead_hmac_sha256_cbc_aes_128;
-	struct qce_cmdlist_info aead_hmac_sha256_cbc_aes_256;
-	struct qce_cmdlist_info aead_hmac_sha256_cbc_des;
-	struct qce_cmdlist_info aead_hmac_sha256_cbc_3des;
+	struct qce_cmdlist_info aead_hmac_sha1_ecb_aes_128;
+	struct qce_cmdlist_info aead_hmac_sha1_ecb_aes_256;
+	struct qce_cmdlist_info aead_hmac_sha1_ecb_des;
+	struct qce_cmdlist_info aead_hmac_sha1_ecb_3des;
 	struct qce_cmdlist_info aead_aes_128_ccm;
 	struct qce_cmdlist_info aead_aes_256_ccm;
 	struct qce_cmdlist_info f8_kasumi;
@@ -178,11 +177,10 @@ struct ce_sps_data {
 	struct scatterlist		*src;
 	struct scatterlist		*dst;
 	uint32_t			ce_device;
-	uint32_t			ce_hw_instance;
 	unsigned int			pipe_pair_index;
 	unsigned int			src_pipe_index;
 	unsigned int			dest_pipe_index;
-	unsigned long			bam_handle;
+	uint32_t			bam_handle;
 
 	enum qce_pipe_st_enum consumer_state;	/* Consumer pipe state */
 	enum qce_pipe_st_enum producer_state;	/* Producer pipe state */

@@ -373,8 +373,7 @@ static int vcap2vpu_set_src_buffer(void *sink_ctx,
 	} else if (i_port_hnd->start_req) {
 		pr_debug("Last buffer received, streamon requested, start\n");
 
-		ret = vpu_hw_session_register_buffers(session->id,
-				translate_port_id(INPUT_PORT),
+		ret = vpu_hw_session_register_buffers(session->id, true,
 				i_port_hnd->buf_array, i_port_hnd->buf_num);
 		if (ret) {
 			pr_err("Register buffer failed (error %d)\n", ret);
@@ -422,8 +421,7 @@ static void vpu_in_vcap_streamoff(struct vpu_dev_session *session,
 	BUG_ON(session != i_port_hnd->session);
 	BUG_ON(session->streaming_state == ALL_STREAMING);
 
-	if (vpu_hw_session_release_buffers(session->id,
-			translate_port_id(INPUT_PORT), CH_RELEASE_IN_BUF))
+	if (vpu_hw_session_release_buffers(session->id, CH_RELEASE_IN_BUF))
 		pr_err("Release buffer failed\n");
 
 	/* notify VCAP*/
@@ -490,8 +488,7 @@ static int vpu_in_vcap_streamon(struct vpu_dev_session *session,
 	}
 
 	pr_debug("Set tunnel buffers to VPU on port %d\n", port);
-	ret = vpu_hw_session_register_buffers(session->id,
-			translate_port_id(INPUT_PORT),
+	ret = vpu_hw_session_register_buffers(session->id, true,
 			i_port_hnd->buf_array, i_port_hnd->buf_num);
 	if (unlikely(ret))
 		pr_err("Register buffer failed (error %d)\n", ret);

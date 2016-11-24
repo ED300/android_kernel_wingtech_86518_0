@@ -390,7 +390,7 @@ config PCI_DOMAINS
 config NO_IOMEM
 	def_bool !PCI
 
-config NO_IOPORT_MAP
+config NO_IOPORT
 	def_bool !PCI
 
 source "drivers/pci/Kconfig"

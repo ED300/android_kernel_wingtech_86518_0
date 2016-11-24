@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,6 +31,7 @@ struct wcnss_wlan_config {
 	int	is_pronto_vt;
 	int	is_pronto_v3;
 	void __iomem	*msm_wcnss_base;
+	int	vbatt;
 };
 
 enum {
@@ -48,6 +49,11 @@ enum {
 	WCNSS_WLAN_MAX_GPIO,
 };
 
+#define WCNSS_VBATT_THRESHOLD           3500000
+#define WCNSS_VBATT_GUARD               20000
+#define WCNSS_VBATT_HIGH                3700000
+#define WCNSS_VBATT_LOW                 3300000
+#define WCNSS_VBATT_INITIAL             3000000
 #define WCNSS_WLAN_IRQ_INVALID -1
 #define HAVE_WCNSS_SUSPEND_RESUME_NOTIFY 1
 #define HAVE_WCNSS_RESET_INTR 1
@@ -112,6 +118,7 @@ void wcnss_riva_dump_pmic_regs(void);
 int wcnss_xo_auto_detect_enabled(void);
 u32 wcnss_get_wlan_rx_buff_count(void);
 int wcnss_wlan_iris_xo_mode(void);
+void wcnss_en_wlan_led_trigger(void);
 #ifdef CONFIG_WCNSS_REGISTER_DUMP_ON_BITE
 void wcnss_log_debug_regs_on_bite(void);
 #else

@@ -310,8 +310,6 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 isolate_fail:
 		if (strict)
 			break;
-		else
-			continue;
 
 	}
 
@@ -881,7 +879,7 @@ static int compact_finished(struct zone *zone,
 			return COMPACT_PARTIAL;
 
 		/* Job done if allocation would set block type */
-		if (cc->order >= pageblock_order && area->nr_free)
+		if (order >= pageblock_order && area->nr_free)
 			return COMPACT_PARTIAL;
 	}
 

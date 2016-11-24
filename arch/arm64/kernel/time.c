@@ -18,7 +18,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <linux/clockchips.h>
 #include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
@@ -34,7 +33,6 @@
 #include <linux/irq.h>
 #include <linux/delay.h>
 #include <linux/clocksource.h>
-#include <linux/clk-provider.h>
 
 #include <clocksource/arm_arch_timer.h>
 
@@ -67,10 +65,7 @@ void __init time_init(void)
 {
 	u32 arch_timer_rate;
 
-	of_clk_init(NULL);
 	clocksource_of_init();
-
-	tick_setup_hrtimer_broadcast();
 
 	arch_timer_rate = arch_timer_get_rate();
 	if (!arch_timer_rate)

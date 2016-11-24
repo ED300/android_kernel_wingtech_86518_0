@@ -1145,19 +1145,6 @@ u32 bam_check_irq_source(void *base, u32 ee, u32 mask,
 	return source;
 }
 
-/*
- * Reset a BAM pipe
- */
-void bam_pipe_reset(void *base, u32 pipe)
-{
-	SPS_DBG2("sps:%s:bam=0x%p(va).pipe=%d.", __func__, base, pipe);
-
-	bam_write_reg(base, P_RST, pipe, 1);
-	wmb(); /* ensure pipe is reset */
-	bam_write_reg(base, P_RST, pipe, 0);
-	wmb(); /* ensure pipe reset is de-asserted*/
-}
-
 /**
  * Initialize a BAM pipe
  */
@@ -1190,7 +1177,7 @@ int bam_pipe_init(void *base, u32 pipe,	struct bam_pipe_parameters *param,
 			    param->stream_mode);
 
 #ifdef CONFIG_SPS_SUPPORT_NDP_BAM
-	if (SPS_LPAE && SPS_GET_UPPER_ADDR(param->desc_base))
+	if (SPS_LPAE)
 		bam_write_reg(base, P_DESC_FIFO_ADDR_MSB, pipe,
 				SPS_GET_UPPER_ADDR(param->desc_base));
 
@@ -1220,7 +1207,7 @@ int bam_pipe_init(void *base, u32 pipe,	struct bam_pipe_parameters *param,
 			param->peer_pipe);
 
 #ifdef CONFIG_SPS_SUPPORT_NDP_BAM
-		if (SPS_LPAE && SPS_GET_UPPER_ADDR(param->data_base)) {
+		if (SPS_LPAE) {
 			bam_write_reg(base, P_EVNT_DEST_ADDR_MSB, pipe, 0x0);
 			bam_write_reg(base, P_DATA_FIFO_ADDR_MSB, pipe,
 				      SPS_GET_UPPER_ADDR(param->data_base));
@@ -1473,15 +1460,6 @@ void bam_pipe_timer_reset(void *base, u32 pipe)
 u32 bam_pipe_timer_get_count(void *base, u32 pipe)
 {
 	return bam_read_reg(base, P_TIMER, pipe);
-}
-
-/* halt and un-halt a pipe */
-void bam_pipe_halt(void *base, u32 pipe, bool halt)
-{
-	if (halt)
-		bam_write_reg_field(base, P_HALT, pipe, P_HALT_P_HALT, 1);
-	else
-		bam_write_reg_field(base, P_HALT, pipe, P_HALT_P_HALT, 0);
 }
 
 /* output the content of BAM-level registers */

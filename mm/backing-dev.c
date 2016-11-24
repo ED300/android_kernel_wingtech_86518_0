@@ -287,9 +287,6 @@ int bdi_has_dirty_io(struct backing_dev_info *bdi)
  * Note, we wouldn't bother setting up the timer, but this function is on the
  * fast-path (used by '__mark_inode_dirty()'), so we save few context switches
  * by delaying the wake-up.
- *
- * We have to be careful not to postpone flush work if it is scheduled for
- * earlier. Thus we use queue_delayed_work().
  */
 void bdi_wakeup_thread_delayed(struct backing_dev_info *bdi)
 {
@@ -298,7 +295,7 @@ void bdi_wakeup_thread_delayed(struct backing_dev_info *bdi)
 	timeout = msecs_to_jiffies(dirty_writeback_interval * 10);
 	spin_lock_bh(&bdi->wb_lock);
 	if (test_bit(BDI_registered, &bdi->state))
-		queue_delayed_work(bdi_wq, &bdi->wb.dwork, timeout);
+		mod_delayed_work(bdi_wq, &bdi->wb.dwork, timeout);
 	spin_unlock_bh(&bdi->wb_lock);
 }
 
@@ -361,6 +358,11 @@ static void bdi_wb_shutdown(struct backing_dev_info *bdi)
 	 * Make sure nobody finds us on the bdi_list anymore
 	 */
 	bdi_remove_from_list(bdi);
+
+	/* Make sure nobody queues further work */
+	spin_lock_bh(&bdi->wb_lock);
+	clear_bit(BDI_registered, &bdi->state);
+	spin_unlock_bh(&bdi->wb_lock);
 
 	/* Make sure nobody queues further work */
 	spin_lock_bh(&bdi->wb_lock);
@@ -557,7 +559,7 @@ void clear_bdi_congested(struct backing_dev_info *bdi, int sync)
 	bit = sync ? BDI_sync_congested : BDI_async_congested;
 	if (test_and_clear_bit(bit, &bdi->state))
 		atomic_dec(&nr_bdi_congested[sync]);
-	smp_mb__after_atomic();
+	smp_mb__after_clear_bit();
 	if (waitqueue_active(wqh))
 		wake_up(wqh);
 }

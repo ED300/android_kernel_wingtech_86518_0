@@ -67,7 +67,6 @@ if (msm_ipc_router_smd_xprt_debug_mask) \
  *                      by IPC Router.
  * @xprt_version: IPC Router header version supported by this XPRT.
  * @xprt_option: XPRT specific options to be handled by IPC Router.
- * @disable_pil_loading: Disable PIL Loading of the subsystem.
  */
 struct msm_ipc_router_smd_xprt {
 	struct list_head list;
@@ -88,7 +87,6 @@ struct msm_ipc_router_smd_xprt {
 	struct completion sft_close_complete;
 	unsigned xprt_version;
 	unsigned xprt_option;
-	bool disable_pil_loading;
 };
 
 struct msm_ipc_router_smd_xprt_work {
@@ -107,7 +105,6 @@ static void smd_xprt_close_event(struct work_struct *work);
  * @edge: ID to differentiate among multiple SMD endpoints.
  * @link_id: Network Cluster ID to which this XPRT belongs to.
  * @xprt_version: IPC Router header version supported by this XPRT.
- * @disable_pil_loading: Disable PIL Loading of the subsystem.
  */
 struct msm_ipc_router_smd_xprt_config {
 	char ch_name[SMD_MAX_CH_NAME_LEN];
@@ -116,7 +113,6 @@ struct msm_ipc_router_smd_xprt_config {
 	uint32_t link_id;
 	unsigned xprt_version;
 	unsigned xprt_option;
-	bool disable_pil_loading;
 };
 
 struct msm_ipc_router_smd_xprt_config smd_xprt_cfg[] = {
@@ -136,8 +132,6 @@ static LIST_HEAD(smd_remote_xprt_list);
 static void pil_vote_load_worker(struct work_struct *work);
 static void pil_vote_unload_worker(struct work_struct *work);
 static struct workqueue_struct *pil_vote_wq;
-
-static bool is_pil_loading_disabled(uint32_t edge);
 
 static int msm_ipc_router_smd_get_xprt_version(
 	struct msm_ipc_router_xprt *xprt)
@@ -188,26 +182,23 @@ static int msm_ipc_router_smd_remote_write(void *data,
 	if (!len || pkt->length != len)
 		return -EINVAL;
 
-	do {
+	while ((ret = smd_write_start(smd_xprtp->channel, len)) < 0) {
 		spin_lock_irqsave(&smd_xprtp->ss_reset_lock, flags);
 		if (smd_xprtp->ss_reset) {
 			spin_unlock_irqrestore(&smd_xprtp->ss_reset_lock,
 						flags);
-			IPC_RTR_ERR("%s: %s chnl reset\n",
-					__func__, xprt->name);
+			pr_err("%s: %s chnl reset\n", __func__, xprt->name);
 			return -ENETRESET;
 		}
 		spin_unlock_irqrestore(&smd_xprtp->ss_reset_lock, flags);
-		ret = smd_write_start(smd_xprtp->channel, len);
-		if (ret < 0 && num_retries >= 5) {
-			IPC_RTR_ERR("%s: Error %d @smd_write_start for %s\n",
+		if (num_retries >= 5) {
+			pr_err("%s: Error %d @smd_write_start for %s\n",
 				__func__, ret, xprt->name);
 			return ret;
-		} else if (ret < 0) {
-			msleep(50);
-			num_retries++;
 		}
-	} while (ret < 0);
+		msleep(50);
+		num_retries++;
+	}
 
 	D("%s: Ready to write %d bytes\n", __func__, len);
 	skb_queue_walk(pkt->pkt_fragment_q, ipc_rtr_pkt) {
@@ -224,7 +215,7 @@ static int msm_ipc_router_smd_remote_write(void *data,
 			if (smd_xprtp->ss_reset) {
 				spin_unlock_irqrestore(
 					&smd_xprtp->ss_reset_lock, flags);
-				IPC_RTR_ERR("%s: %s chnl reset\n",
+				pr_err("%s: %s chnl reset\n",
 					__func__, xprt->name);
 				return -ENETRESET;
 			}
@@ -233,7 +224,7 @@ static int msm_ipc_router_smd_remote_write(void *data,
 
 			sz_written = smd_write_segment(smd_xprtp->channel,
 					ipc_rtr_pkt->data + offset,
-					(ipc_rtr_pkt->len - offset));
+					(ipc_rtr_pkt->len - offset), 0);
 			offset += sz_written;
 			sz_written = 0;
 		}
@@ -284,7 +275,7 @@ static void smd_xprt_read_data(struct work_struct *work)
 		if (smd_xprtp->in_pkt)
 			release_pkt(smd_xprtp->in_pkt);
 		smd_xprtp->is_partial_in_pkt = 0;
-		IPC_RTR_ERR("%s: %s channel reset\n",
+		pr_err("%s: %s channel reset\n",
 			__func__, smd_xprtp->xprt.name);
 		return;
 	}
@@ -296,12 +287,24 @@ static void smd_xprt_read_data(struct work_struct *work)
 	while ((pkt_size = smd_cur_packet_size(smd_xprtp->channel)) &&
 		smd_read_avail(smd_xprtp->channel)) {
 		if (!smd_xprtp->is_partial_in_pkt) {
-			smd_xprtp->in_pkt = create_pkt(NULL);
+			smd_xprtp->in_pkt = kzalloc(sizeof(struct rr_packet),
+						    GFP_KERNEL);
 			if (!smd_xprtp->in_pkt) {
-				IPC_RTR_ERR("%s: Couldn't alloc rr_packet\n",
+				pr_err("%s: Couldn't alloc rr_packet\n",
 					__func__);
 				return;
 			}
+
+			smd_xprtp->in_pkt->pkt_fragment_q =
+				kmalloc(sizeof(struct sk_buff_head),
+					GFP_KERNEL);
+			if (!smd_xprtp->in_pkt->pkt_fragment_q) {
+				pr_err("%s: Couldn't alloc pkt_fragment_q\n",
+					__func__);
+				kfree(smd_xprtp->in_pkt);
+				return;
+			}
+			skb_queue_head_init(smd_xprtp->in_pkt->pkt_fragment_q);
 			smd_xprtp->is_partial_in_pkt = 1;
 			D("%s: Allocated rr_packet\n", __func__);
 		}
@@ -331,7 +334,7 @@ static void smd_xprt_read_data(struct work_struct *work)
 		data = skb_put(ipc_rtr_pkt, sz);
 		sz_read = smd_read(smd_xprtp->channel, data, sz);
 		if (sz_read != sz) {
-			IPC_RTR_ERR("%s: Couldn't read %s completely\n",
+			pr_err("%s: Couldn't read %s completely\n",
 				__func__, smd_xprtp->xprt.name);
 			kfree_skb(ipc_rtr_pkt);
 			release_pkt(smd_xprtp->in_pkt);
@@ -416,8 +419,7 @@ static void msm_ipc_router_smd_remote_notify(void *_dev, unsigned event)
 		xprt_work = kmalloc(sizeof(struct msm_ipc_router_smd_xprt_work),
 				    GFP_ATOMIC);
 		if (!xprt_work) {
-			IPC_RTR_ERR(
-			"%s: Couldn't notify %d event to IPC Router\n",
+			pr_err("%s: Couldn't notify %d event to IPC Router\n",
 				__func__, event);
 			return;
 		}
@@ -434,8 +436,7 @@ static void msm_ipc_router_smd_remote_notify(void *_dev, unsigned event)
 		xprt_work = kmalloc(sizeof(struct msm_ipc_router_smd_xprt_work),
 				    GFP_ATOMIC);
 		if (!xprt_work) {
-			IPC_RTR_ERR(
-			"%s: Couldn't notify %d event to IPC Router\n",
+			pr_err("%s: Couldn't notify %d event to IPC Router\n",
 				__func__, event);
 			return;
 		}
@@ -450,14 +451,12 @@ static void *msm_ipc_load_subsystem(uint32_t edge)
 {
 	void *pil = NULL;
 	const char *peripheral;
-	bool loading_disabled;
 
-	loading_disabled = is_pil_loading_disabled(edge);
 	peripheral = smd_edge_to_pil_str(edge);
-	if (!IS_ERR_OR_NULL(peripheral) && !loading_disabled) {
+	if (!IS_ERR_OR_NULL(peripheral)) {
 		pil = subsystem_get(peripheral);
 		if (IS_ERR(pil)) {
-			IPC_RTR_ERR("%s: Failed to load %s\n",
+			pr_err("%s: Failed to load %s\n",
 				__func__, peripheral);
 			pil = NULL;
 		}
@@ -492,27 +491,6 @@ static struct msm_ipc_router_smd_xprt *
 }
 
 /**
- * is_pil_loading_disabled() - Check if pil loading a subsystem is disabled
- * @edge: Edge that points to the remote subsystem.
- *
- * @return: true if disabled, false if enabled.
- */
-static bool is_pil_loading_disabled(uint32_t edge)
-{
-	struct msm_ipc_router_smd_xprt *smd_xprtp;
-
-	mutex_lock(&smd_remote_xprt_list_lock_lha1);
-	list_for_each_entry(smd_xprtp, &smd_remote_xprt_list, list) {
-		if (smd_xprtp->edge == edge) {
-			mutex_unlock(&smd_remote_xprt_list_lock_lha1);
-			return smd_xprtp->disable_pil_loading;
-		}
-	}
-	mutex_unlock(&smd_remote_xprt_list_lock_lha1);
-	return true;
-}
-
-/**
  * msm_ipc_router_smd_remote_probe() - Probe an SMD endpoint
  *
  * @pdev: Platform device corresponding to SMD endpoint.
@@ -529,20 +507,19 @@ static int msm_ipc_router_smd_remote_probe(struct platform_device *pdev)
 
 	smd_xprtp = find_smd_xprt_list(pdev);
 	if (!smd_xprtp) {
-		IPC_RTR_ERR("%s No device with name %s\n",
-					__func__, pdev->name);
+		pr_err("%s No device with name %s\n", __func__, pdev->name);
 		return -EPROBE_DEFER;
 	}
 	if (strcmp(pdev->name, smd_xprtp->ch_name)
 			|| (pdev->id != smd_xprtp->edge)) {
-		IPC_RTR_ERR("%s wrong item name:%s edge:%d\n",
+		pr_err("%s wrong item name:%s edge:%d\n",
 				__func__, smd_xprtp->ch_name, smd_xprtp->edge);
 		return -ENODEV;
 	}
 	smd_xprtp->smd_xprt_wq =
 		create_singlethread_workqueue(pdev->name);
 	if (!smd_xprtp->smd_xprt_wq) {
-		IPC_RTR_ERR("%s: WQ creation failed for %s\n",
+		pr_err("%s: WQ creation failed for %s\n",
 			__func__, pdev->name);
 		return -EFAULT;
 	}
@@ -555,7 +532,7 @@ static int msm_ipc_router_smd_remote_probe(struct platform_device *pdev)
 				    smd_xprtp,
 				    msm_ipc_router_smd_remote_notify);
 	if (rc < 0) {
-		IPC_RTR_ERR("%s: Channel open failed for %s\n",
+		pr_err("%s: Channel open failed for %s\n",
 			__func__, smd_xprtp->ch_name);
 		if (smd_xprtp->pil) {
 			subsystem_put(smd_xprtp->pil);
@@ -590,17 +567,14 @@ static void pil_vote_load_worker(struct work_struct *work)
 {
 	const char *peripheral;
 	struct pil_vote_info *vote_info;
-	bool loading_disabled;
 
 	vote_info = container_of(work, struct pil_vote_info, load_work);
 	peripheral = smd_edge_to_pil_str(SMD_APPS_MODEM);
-	loading_disabled = is_pil_loading_disabled(SMD_APPS_MODEM);
 
-	if (!IS_ERR_OR_NULL(peripheral) && !strcmp(peripheral, "modem") &&
-	    !loading_disabled) {
+	if (!IS_ERR_OR_NULL(peripheral) && !strcmp(peripheral, "modem")) {
 		vote_info->pil_handle = subsystem_get(peripheral);
 		if (IS_ERR(vote_info->pil_handle)) {
-			IPC_RTR_ERR("%s: Failed to load %s\n",
+			pr_err("%s: Failed to load %s\n",
 				__func__, peripheral);
 			vote_info->pil_handle = NULL;
 		}
@@ -710,13 +684,12 @@ static int msm_ipc_router_smd_driver_register(
 
 		ret = platform_driver_register(&smd_xprtp->driver);
 		if (ret) {
-			IPC_RTR_ERR(
-			"%s: Failed to register platform driver [%s]\n",
+			pr_err("%s: Failed to register platform driver [%s]\n",
 						__func__, smd_xprtp->ch_name);
 			return ret;
 		}
 	} else {
-		IPC_RTR_ERR("%s Already driver registered %s\n",
+		pr_err("%s Already driver registered %s\n",
 					__func__, smd_xprtp->ch_name);
 	}
 	return 0;
@@ -739,7 +712,7 @@ static int msm_ipc_router_smd_config_init(
 
 	smd_xprtp = kzalloc(sizeof(struct msm_ipc_router_smd_xprt), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(smd_xprtp)) {
-		IPC_RTR_ERR("%s: kzalloc() failed for smd_xprtp id:%s\n",
+		pr_err("%s: kzalloc() failed for smd_xprtp id:%s\n",
 				__func__, smd_xprt_config->ch_name);
 		return -ENOMEM;
 	}
@@ -748,7 +721,6 @@ static int msm_ipc_router_smd_config_init(
 	smd_xprtp->xprt_version = smd_xprt_config->xprt_version;
 	smd_xprtp->edge = smd_xprt_config->edge;
 	smd_xprtp->xprt_option = smd_xprt_config->xprt_option;
-	smd_xprtp->disable_pil_loading = smd_xprt_config->disable_pil_loading;
 
 	strlcpy(smd_xprtp->ch_name, smd_xprt_config->ch_name,
 						SMD_MAX_CH_NAME_LEN);
@@ -831,16 +803,13 @@ static int parse_devicetree(struct device_node *node,
 	key = "qcom,fragmented-data";
 	smd_xprt_config->xprt_option = of_property_read_bool(node, key);
 
-	key = "qcom,disable-pil-loading";
-	smd_xprt_config->disable_pil_loading = of_property_read_bool(node, key);
-
 	scnprintf(smd_xprt_config->xprt_name, XPRT_NAME_LEN, "%s_%s",
 			remote_ss, smd_xprt_config->ch_name);
 
 	return 0;
 
 error:
-	IPC_RTR_ERR("%s: missing key: %s\n", __func__, key);
+	pr_err("%s: missing key: %s\n", __func__, key);
 	return -ENODEV;
 }
 
@@ -868,14 +837,13 @@ static int msm_ipc_router_smd_xprt_probe(struct platform_device *pdev)
 			ret = parse_devicetree(pdev->dev.of_node,
 							&smd_xprt_config);
 			if (ret) {
-				IPC_RTR_ERR("%s: Failed to parse device tree\n",
-								__func__);
+				pr_err(" failed to parse device tree\n");
 				return ret;
 			}
 
 			ret = msm_ipc_router_smd_config_init(&smd_xprt_config);
 			if (ret) {
-				IPC_RTR_ERR("%s init failed\n", __func__);
+				pr_err("%s init failed\n", __func__);
 				return ret;
 			}
 		}
@@ -904,7 +872,7 @@ static void ipc_router_smd_xprt_probe_worker(struct work_struct *work)
 		for (i = 0; i < ARRAY_SIZE(smd_xprt_cfg); i++) {
 			ret = msm_ipc_router_smd_config_init(&smd_xprt_cfg[i]);
 			if (ret)
-				IPC_RTR_ERR(" %s init failed config idx %d\n",
+				pr_err(" %s init failed config idx %d\n",
 							__func__, i);
 		}
 		mutex_lock(&smd_remote_xprt_list_lock_lha1);
@@ -932,8 +900,7 @@ static int __init msm_ipc_router_smd_xprt_init(void)
 
 	rc = platform_driver_register(&msm_ipc_router_smd_xprt_driver);
 	if (rc) {
-		IPC_RTR_ERR(
-		"%s: msm_ipc_router_smd_xprt_driver register failed %d\n",
+		pr_err("%s: msm_ipc_router_smd_xprt_driver register failed %d\n",
 								__func__, rc);
 		return rc;
 	}

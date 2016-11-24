@@ -12,16 +12,11 @@
 #include <asm/pgtable.h>
 #endif
 
-#if (!defined(CONFIG_DEBUG_SPINLOCK)) || defined(CONFIG_GENERIC_BUG)
-#define ARM_EXIT_KEEP(x)	x
-#define ARM_EXIT_DISCARD(x)
-#else
 #define ARM_EXIT_KEEP(x)
 #define ARM_EXIT_DISCARD(x)	x
-#endif
 
 OUTPUT_ARCH(aarch64)
-ENTRY(_text)
+ENTRY(stext)
 
 jiffies = jiffies_64;
 
@@ -65,7 +60,6 @@ SECTIONS
 #endif
 	.text : {			/* Real text segment		*/
 		_stext = .;		/* Text and read-only data	*/
-			*(.latehead.text)
 			__exception_text_start = .;
 			*(.exception.text)
 			__exception_text_end = .;
@@ -123,14 +117,17 @@ SECTIONS
 
 	. = ALIGN(PAGE_SIZE);
 	_data = .;
+	__data_loc = _data - LOAD_OFFSET;
 	_sdata = .;
 	RW_DATA_SECTION(64, PAGE_SIZE, THREAD_SIZE)
 	_edata = .;
+	_edata_loc = __data_loc + SIZEOF(.data);
 
 	BSS_SECTION(0, 0, 0)
 	_end = .;
 
 	STABS_DEBUG
+	.comment 0 : { *(.comment) }
 }
 
 /*

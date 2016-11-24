@@ -137,6 +137,7 @@ void disable_debug_monitors(enum debug_el el)
 static void clear_os_lock(void *unused)
 {
 	asm volatile("msr oslar_el1, %0" : : "r" (0));
+	isb();
 }
 
 static int __cpuinit os_lock_notify(struct notifier_block *self,
@@ -154,17 +155,12 @@ static struct notifier_block __cpuinitdata os_lock_nb = {
 
 static int __cpuinit debug_monitors_init(void)
 {
-	cpu_notifier_register_begin();
-
 	/* Clear the OS lock. */
-	on_each_cpu(clear_os_lock, NULL, 1);
-	isb();
-	local_dbg_enable();
+	smp_call_function(clear_os_lock, NULL, 1);
+	clear_os_lock(NULL);
 
 	/* Register hotplug handler. */
-	__register_cpu_notifier(&os_lock_nb);
-
-	cpu_notifier_register_done();
+	register_cpu_notifier(&os_lock_nb);
 	return 0;
 }
 postcore_initcall(debug_monitors_init);
@@ -189,48 +185,6 @@ static void clear_regs_spsr_ss(struct pt_regs *regs)
 	spsr = regs->pstate;
 	spsr &= ~DBG_SPSR_SS;
 	regs->pstate = spsr;
-}
-
-/* EL1 Single Step Handler hooks */
-static LIST_HEAD(step_hook);
-static DEFINE_RWLOCK(step_hook_lock);
-
-void register_step_hook(struct step_hook *hook)
-{
-	write_lock(&step_hook_lock);
-	list_add(&hook->node, &step_hook);
-	write_unlock(&step_hook_lock);
-}
-
-void unregister_step_hook(struct step_hook *hook)
-{
-	write_lock(&step_hook_lock);
-	list_del(&hook->node);
-	write_unlock(&step_hook_lock);
-}
-
-/*
- * Call registered single step handers
- * There is no Syndrome info to check for determining the handler.
- * So we call all the registered handlers, until the right handler is
- * found which returns zero.
- */
-static int call_step_hook(struct pt_regs *regs, unsigned int esr)
-{
-	struct step_hook *hook;
-	int retval = DBG_HOOK_ERROR;
-
-	read_lock(&step_hook_lock);
-
-	list_for_each_entry(hook, &step_hook, node)	{
-		retval = hook->fn(regs, esr);
-		if (retval == DBG_HOOK_HANDLED)
-			break;
-	}
-
-	read_unlock(&step_hook_lock);
-
-	return retval;
 }
 
 static int single_step_handler(unsigned long addr, unsigned int esr,
@@ -260,9 +214,7 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 		 */
 		user_rewind_single_step(current);
 	} else {
-		if (call_step_hook(regs, esr) == DBG_HOOK_HANDLED)
-			return 0;
-
+		/* TODO: route to KGDB */
 		pr_warning("Unexpected kernel single-step exception at EL1\n");
 		/*
 		 * Re-enable stepping since we know that we will be
@@ -274,49 +226,10 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 	return 0;
 }
 
-/*
- * Breakpoint handler is re-entrant as another breakpoint can
- * hit within breakpoint handler, especically in kprobes.
- * Use reader/writer locks instead of plain spinlock.
- */
-static LIST_HEAD(break_hook);
-static DEFINE_RWLOCK(break_hook_lock);
-
-void register_break_hook(struct break_hook *hook)
-{
-	write_lock(&break_hook_lock);
-	list_add(&hook->node, &break_hook);
-	write_unlock(&break_hook_lock);
-}
-
-void unregister_break_hook(struct break_hook *hook)
-{
-	write_lock(&break_hook_lock);
-	list_del(&hook->node);
-	write_unlock(&break_hook_lock);
-}
-
-static int call_break_hook(struct pt_regs *regs, unsigned int esr)
-{
-	struct break_hook *hook;
-	int (*fn)(struct pt_regs *regs, unsigned int esr) = NULL;
-
-	read_lock(&break_hook_lock);
-	list_for_each_entry(hook, &break_hook, node)
-		if ((esr & hook->esr_mask) == hook->esr_val)
-			fn = hook->fn;
-	read_unlock(&break_hook_lock);
-
-	return fn ? fn(regs, esr) : DBG_HOOK_ERROR;
-}
-
 static int brk_handler(unsigned long addr, unsigned int esr,
 		       struct pt_regs *regs)
 {
 	siginfo_t info;
-
-	if (call_break_hook(regs, esr) == DBG_HOOK_HANDLED)
-		return 0;
 
 	if (!user_mode(regs))
 		return -EFAULT;

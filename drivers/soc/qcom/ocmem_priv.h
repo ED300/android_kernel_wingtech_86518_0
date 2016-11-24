@@ -107,9 +107,10 @@ enum op_code {
 
 /* Operational modes of each region */
 enum region_mode {
-	WIDE_MODE = 0x0,
+	MODE_NOT_SET = 0x0,
+	WIDE_MODE,
 	THIN_MODE,
-	MODE_DEFAULT = WIDE_MODE,
+	MODE_DEFAULT = MODE_NOT_SET,
 };
 
 struct ocmem_plat_data {

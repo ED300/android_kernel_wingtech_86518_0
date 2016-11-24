@@ -22,11 +22,19 @@
 			reg = <0x100 0x100>;
 		};
 
-		pmd9635_pon: qcom,power-on@800 {
+		qcom,power-on@800 {
 			compatible = "qcom,qpnp-power-on";
 			reg = <0x800 0x100>;
+			interrupts = <0x0 0x8 0x2>;
+			interrupt-names = "cblpwr";
 			qcom,pon-dbc-delay = <15625>;
+			qcom,system-reset;
 
+			qcom,pon_1 {
+				qcom,pon-type = <2>;
+				qcom,pull-up = <1>;
+				linux,code = <116>;
+			};
 		};
 
 		pmd9635_gpios: gpios {
@@ -53,13 +61,11 @@
 			gpio@c200 {
 				reg = <0xc200 0x100>;
 				qcom,pin-num = <3>;
-				status = "disabled";
 			};
 
 			gpio@c300 {
 				reg = <0xc300 0x100>;
 				qcom,pin-num = <4>;
-				status = "disabled";
 			};
 
 			gpio@c400 {
@@ -87,25 +93,21 @@
 			mpp@a000 {
 				reg = <0xa000 0x100>;
 				qcom,pin-num = <1>;
-				status = "disabled";
 			};
 
 			mpp@a100 {
 				reg = <0xa100 0x100>;
 				qcom,pin-num = <2>;
-				status = "disabled";
 			};
 
 			mpp@a200 {
 				reg = <0xa200 0x100>;
 				qcom,pin-num = <3>;
-				status = "disabled";
 			};
 
 			mpp@a300 {
 				reg = <0xa300 0x100>;
 				qcom,pin-num = <4>;
-				status = "disabled";
 			};
 
 			mpp@a400 {
@@ -117,7 +119,6 @@
 			mpp@a500 {
 				reg = <0xa500 0x100>;
 				qcom,pin-num = <6>;
-				status = "disabled";
 			};
 		};
 

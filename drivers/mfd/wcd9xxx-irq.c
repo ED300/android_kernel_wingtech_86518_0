@@ -32,10 +32,6 @@
 
 #define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 100
 
-#ifndef NO_IRQ
-#define NO_IRQ	(-1)
-#endif
-
 #ifdef CONFIG_OF
 struct wcd9xxx_irq_drv_data {
 	struct irq_domain *domain;
@@ -103,15 +99,8 @@ static void wcd9xxx_irq_enable(struct irq_data *data)
 	struct wcd9xxx_core_resource *wcd9xxx_res =
 			irq_data_get_irq_chip_data(data);
 	int wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	int byte = BIT_BYTE(wcd9xxx_irq);
-	int size = ARRAY_SIZE(wcd9xxx_res->irq_masks_cur);
-	if ((byte < size) && (byte >= 0)) {
-		wcd9xxx_res->irq_masks_cur[byte] &=
-			~(BYTE_BIT_MASK(wcd9xxx_irq));
-	} else {
-		pr_err("%s: Array size is %d but index is %d: Out of range\n",
-			__func__, size, byte);
-	}
+	wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)] &=
+		~(BYTE_BIT_MASK(wcd9xxx_irq));
 }
 
 static void wcd9xxx_irq_disable(struct irq_data *data)
@@ -119,30 +108,8 @@ static void wcd9xxx_irq_disable(struct irq_data *data)
 	struct wcd9xxx_core_resource *wcd9xxx_res =
 			irq_data_get_irq_chip_data(data);
 	int wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	int byte = BIT_BYTE(wcd9xxx_irq);
-	int size = ARRAY_SIZE(wcd9xxx_res->irq_masks_cur);
-	if ((byte < size) && (byte >= 0)) {
-		wcd9xxx_res->irq_masks_cur[byte]
-			|= BYTE_BIT_MASK(wcd9xxx_irq);
-	} else {
-		pr_err("%s: Array size is %d but index is %d: Out of range\n",
-			__func__, size, byte);
-	}
-}
-
-static void wcd9xxx_irq_ack(struct irq_data *data)
-{
-	int wcd9xxx_irq = 0;
-	struct wcd9xxx_core_resource *wcd9xxx_res =
-			irq_data_get_irq_chip_data(data);
-
-	if (wcd9xxx_res == NULL) {
-		pr_err("%s: wcd9xxx_res is NULL\n", __func__);
-		return;
-	}
-	wcd9xxx_irq = virq_to_phyirq(wcd9xxx_res, data->irq);
-	pr_debug("%s: IRQ_ACK called for WCD9XXX IRQ: %d\n",
-				__func__, wcd9xxx_irq);
+	wcd9xxx_res->irq_masks_cur[BIT_BYTE(wcd9xxx_irq)]
+		|= BYTE_BIT_MASK(wcd9xxx_irq);
 }
 
 static void wcd9xxx_irq_mask(struct irq_data *d)
@@ -157,7 +124,6 @@ static struct irq_chip wcd9xxx_irq_chip = {
 	.irq_disable = wcd9xxx_irq_disable,
 	.irq_enable = wcd9xxx_irq_enable,
 	.irq_mask = wcd9xxx_irq_mask,
-	.irq_ack = wcd9xxx_irq_ack,
 };
 
 bool wcd9xxx_lock_sleep(
@@ -532,7 +498,7 @@ int wcd9xxx_request_irq(struct wcd9xxx_core_resource *wcd9xxx_res,
 	 * ARM needs us to explicitly flag the IRQ as valid
 	 * and will set them noprobe when we do so.
 	 */
-#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+#ifdef CONFIG_ARM
 	set_irq_flags(virq, IRQF_VALID);
 #else
 	set_irq_noprobe(virq);

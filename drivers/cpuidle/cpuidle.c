@@ -19,6 +19,7 @@
 #include <linux/ktime.h>
 #include <linux/hrtimer.h>
 #include <linux/module.h>
+#include <trace/events/power.h>
 
 #include "cpuidle.h"
 
@@ -134,6 +135,9 @@ int cpuidle_idle_call(void)
 
 	/* ask the governor for the next state */
 	next_state = cpuidle_curr_governor->select(drv, dev);
+	if (next_state < 0)
+		return -EBUSY;
+
 	if (need_resched()) {
 		dev->last_residency = 0;
 		/* give the governor an opportunity to reflect on the outcome */
@@ -142,6 +146,8 @@ int cpuidle_idle_call(void)
 		local_irq_enable();
 		return 0;
 	}
+
+	trace_cpu_idle_rcuidle(next_state, dev->cpu);
 
 	if (drv->states[next_state].flags & CPUIDLE_FLAG_TIMER_STOP)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_ENTER,
@@ -156,6 +162,8 @@ int cpuidle_idle_call(void)
 	if (drv->states[next_state].flags & CPUIDLE_FLAG_TIMER_STOP)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT,
 				   &dev->cpu);
+
+	trace_cpu_idle_rcuidle(PWR_EVENT_EXIT, dev->cpu);
 
 	/* give the governor an opportunity to reflect on the outcome */
 	if (cpuidle_curr_governor->reflect)
@@ -536,14 +544,7 @@ static void smp_callback(void *v)
 static int cpuidle_latency_notify(struct notifier_block *b,
 		unsigned long l, void *v)
 {
-	const struct cpumask *cpus;
-
-	cpus = v ?: cpu_online_mask;
-
-	preempt_disable();
-	smp_call_function_many(cpus, smp_callback, NULL, 1);
-	preempt_enable();
-
+	smp_call_function(smp_callback, NULL, 1);
 	return NOTIFY_OK;
 }
 

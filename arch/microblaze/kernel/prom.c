@@ -42,13 +42,13 @@
 #include <asm/pci-bridge.h>
 
 #ifdef CONFIG_EARLY_PRINTK
-static const char *stdout;
+static char *stdout;
 
 static int __init early_init_dt_scan_chosen_serial(unsigned long node,
 				const char *uname, int depth, void *data)
 {
-	int l;
-	const char *p;
+	unsigned long l;
+	char *p;
 
 	pr_debug("%s: depth: %d, uname: %s\n", __func__, depth, uname);
 
@@ -79,7 +79,7 @@ static int __init early_init_dt_scan_chosen_serial(unsigned long node,
 				(strncmp(p, "xlnx,opb-uartlite", 17) == 0) ||
 				(strncmp(p, "xlnx,axi-uartlite", 17) == 0) ||
 				(strncmp(p, "xlnx,mdm", 8) == 0)) {
-			const unsigned int *addrp;
+			unsigned int *addrp;
 
 			*(u32 *)data = UARTLITE;
 
@@ -163,3 +163,4 @@ static int __init export_flat_device_tree(void)
 	return 0;
 }
 device_initcall(export_flat_device_tree);
+#endif

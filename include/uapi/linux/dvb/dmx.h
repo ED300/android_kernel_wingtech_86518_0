@@ -183,10 +183,7 @@ struct dmx_buffer_status {
 	/* fullness of buffer in bytes */
 	unsigned int fullness;
 
-	/*
-	 * How many bytes are free
-	 * It's the same as: size-fullness-1
-	 */
+	/* How many bytes are free */
 	unsigned int free_bytes;
 
 	/* read pointer offset in bytes */

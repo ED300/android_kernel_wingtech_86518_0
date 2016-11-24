@@ -226,21 +226,30 @@ static inline void smd_write_intr(unsigned int val, void __iomem *addr)
  * @dest: Destination address
  * @src: Source address
  * @num_bytes: Number of bytes to copy
+ * @from_user: true if data being copied is from userspace, false otherwise
  *
  * @return: Address of destination
  *
  * This function copies num_bytes from src to dest. This is used as the memcpy
  * function to copy data to SMD FIFO in case the SMD FIFO is naturally aligned.
  */
-static void *smd_memcpy_to_fifo(void *dest, const void *src, size_t num_bytes)
+static void *smd_memcpy_to_fifo(void *dest, const void *src, size_t num_bytes,
+								bool from_user)
 {
 	union fifo_mem *temp_dst = (union fifo_mem *)dest;
 	union fifo_mem *temp_src = (union fifo_mem *)src;
 	uintptr_t mask = sizeof(union fifo_mem) - 1;
+	int ret;
 
 	/* Do byte copies until we hit 8-byte (double word) alignment */
 	while ((uintptr_t)temp_dst & mask && num_bytes) {
-		__raw_writeb_no_log(temp_src->u8, temp_dst);
+		if (from_user) {
+			ret = copy_from_user(temp_dst, temp_src, 1);
+			BUG_ON(ret != 0);
+		} else {
+			__raw_writeb_no_log(temp_src->u8, temp_dst);
+		}
+
 		temp_src = (union fifo_mem *)((uintptr_t)temp_src + 1);
 		temp_dst = (union fifo_mem *)((uintptr_t)temp_dst + 1);
 		num_bytes--;
@@ -248,7 +257,14 @@ static void *smd_memcpy_to_fifo(void *dest, const void *src, size_t num_bytes)
 
 	/* Do double word copies */
 	while (num_bytes >= sizeof(union fifo_mem)) {
-		__raw_writeq_no_log(temp_src->u64, temp_dst);
+		if (from_user) {
+			ret = copy_from_user(temp_dst, temp_src,
+				sizeof(union fifo_mem));
+			BUG_ON(ret != 0);
+		} else {
+			__raw_writeq_no_log(temp_src->u64, temp_dst);
+		}
+
 		temp_dst++;
 		temp_src++;
 		num_bytes -= sizeof(union fifo_mem);
@@ -256,7 +272,13 @@ static void *smd_memcpy_to_fifo(void *dest, const void *src, size_t num_bytes)
 
 	/* Copy remaining bytes */
 	while (num_bytes--) {
-		__raw_writeb_no_log(temp_src->u8, temp_dst);
+		if (from_user) {
+			ret = copy_from_user(temp_dst, temp_src, 1);
+			BUG_ON(ret != 0);
+		} else {
+			__raw_writeb_no_log(temp_src->u8, temp_dst);
+		}
+
 		temp_src = (union fifo_mem *)((uintptr_t)temp_src + 1);
 		temp_dst = (union fifo_mem *)((uintptr_t)temp_dst + 1);
 	}
@@ -269,6 +291,7 @@ static void *smd_memcpy_to_fifo(void *dest, const void *src, size_t num_bytes)
  * @dest: Destination address
  * @src: Source address
  * @num_bytes: Number of bytes to copy
+ * @to_user: true if data being copied is from userspace, false otherwise
  *
  * @return: Address of destination
  *
@@ -276,15 +299,23 @@ static void *smd_memcpy_to_fifo(void *dest, const void *src, size_t num_bytes)
  * function to copy data from SMD FIFO in case the SMD FIFO is naturally
  * aligned.
  */
-static void *smd_memcpy_from_fifo(void *dest, const void *src, size_t num_bytes)
+static void *smd_memcpy_from_fifo(void *dest, const void *src, size_t num_bytes,
+								bool to_user)
 {
 	union fifo_mem *temp_dst = (union fifo_mem *)dest;
 	union fifo_mem *temp_src = (union fifo_mem *)src;
 	uintptr_t mask = sizeof(union fifo_mem) - 1;
+	int ret;
 
 	/* Do byte copies until we hit 8-byte (double word) alignment */
 	while ((uintptr_t)temp_src & mask && num_bytes) {
-		temp_dst->u8 = __raw_readb_no_log(temp_src);
+		if (to_user) {
+			ret = copy_to_user(temp_dst, temp_src, 1);
+			BUG_ON(ret != 0);
+		} else {
+			temp_dst->u8 = __raw_readb_no_log(temp_src);
+		}
+
 		temp_src = (union fifo_mem *)((uintptr_t)temp_src + 1);
 		temp_dst = (union fifo_mem *)((uintptr_t)temp_dst + 1);
 		num_bytes--;
@@ -292,7 +323,14 @@ static void *smd_memcpy_from_fifo(void *dest, const void *src, size_t num_bytes)
 
 	/* Do double word copies */
 	while (num_bytes >= sizeof(union fifo_mem)) {
-		temp_dst->u64 = __raw_readq_no_log(temp_src);
+		if (to_user) {
+			ret = copy_to_user(temp_dst, temp_src,
+				sizeof(union fifo_mem));
+			BUG_ON(ret != 0);
+		} else {
+			temp_dst->u64 = __raw_readq_no_log(temp_src);
+		}
+
 		temp_dst++;
 		temp_src++;
 		num_bytes -= sizeof(union fifo_mem);
@@ -300,7 +338,13 @@ static void *smd_memcpy_from_fifo(void *dest, const void *src, size_t num_bytes)
 
 	/* Copy remaining bytes */
 	while (num_bytes--) {
-		temp_dst->u8 = __raw_readb_no_log(temp_src);
+		if (to_user) {
+			ret = copy_to_user(temp_dst, temp_src, 1);
+			BUG_ON(ret != 0);
+		} else {
+			temp_dst->u8 = __raw_readb_no_log(temp_src);
+		}
+
 		temp_src = (union fifo_mem *)((uintptr_t)temp_src + 1);
 		temp_dst = (union fifo_mem *)((uintptr_t)temp_dst + 1);
 	}
@@ -314,6 +358,7 @@ static void *smd_memcpy_from_fifo(void *dest, const void *src, size_t num_bytes)
  * @dest: Destination address
  * @src: Source address
  * @num_bytes: Number of bytes to copy
+ * @from_user: always false
  *
  * @return: On Success, address of destination
  *
@@ -321,10 +366,16 @@ static void *smd_memcpy_from_fifo(void *dest, const void *src, size_t num_bytes)
  * memcpy function to copy data to SMD FIFO in case the SMD FIFO is 4 byte
  * aligned.
  */
-static void *smd_memcpy32_to_fifo(void *dest, const void *src, size_t num_bytes)
+static void *smd_memcpy32_to_fifo(void *dest, const void *src, size_t num_bytes,
+								bool from_user)
 {
 	uint32_t *dest_local = (uint32_t *)dest;
 	uint32_t *src_local = (uint32_t *)src;
+
+	if (from_user) {
+		panic("%s: Word Based Access not supported",
+			__func__);
+	}
 
 	BUG_ON(num_bytes & SMD_FIFO_ADDR_ALIGN_BYTES);
 	BUG_ON(!dest_local ||
@@ -344,6 +395,7 @@ static void *smd_memcpy32_to_fifo(void *dest, const void *src, size_t num_bytes)
  * @dest: Destination address
  * @src: Source address
  * @num_bytes: Number of bytes to copy
+ * @to_user: true if data being copied is from userspace, false otherwise
  *
  * @return: On Success, destination address
  *
@@ -352,11 +404,16 @@ static void *smd_memcpy32_to_fifo(void *dest, const void *src, size_t num_bytes)
  * aligned.
  */
 static void *smd_memcpy32_from_fifo(void *dest, const void *src,
-						size_t num_bytes)
+						size_t num_bytes, bool to_user)
 {
 
 	uint32_t *dest_local = (uint32_t *)dest;
 	uint32_t *src_local = (uint32_t *)src;
+
+	if (to_user) {
+		panic("%s: Word Based Access not supported",
+			__func__);
+	}
 
 	BUG_ON(num_bytes & SMD_FIFO_ADDR_ALIGN_BYTES);
 	BUG_ON(!dest_local ||
@@ -1077,34 +1134,22 @@ void smd_channel_reset(uint32_t restart_pid)
 /* how many bytes are available for reading */
 static int smd_stream_read_avail(struct smd_channel *ch)
 {
-	unsigned head = ch->half_ch->get_head(ch->recv);
-	unsigned tail = ch->half_ch->get_tail(ch->recv);
-	unsigned fifo_size = ch->fifo_size;
-	unsigned bytes_avail = head - tail;
-
-	if (head < tail)
-		bytes_avail += fifo_size;
-
-	BUG_ON(bytes_avail >= fifo_size);
-	return bytes_avail;
+	return (ch->half_ch->get_head(ch->recv) -
+			ch->half_ch->get_tail(ch->recv)) & ch->fifo_mask;
 }
 
 /* how many bytes we are free to write */
 static int smd_stream_write_avail(struct smd_channel *ch)
 {
-	unsigned head = ch->half_ch->get_head(ch->send);
-	unsigned tail = ch->half_ch->get_tail(ch->send);
-	unsigned fifo_size = ch->fifo_size;
-	unsigned bytes_avail = tail - head;
+	int bytes_avail;
 
-	if (tail <= head)
-		bytes_avail += fifo_size;
+	bytes_avail = ch->fifo_mask - ((ch->half_ch->get_head(ch->send) -
+			ch->half_ch->get_tail(ch->send)) & ch->fifo_mask) + 1;
+
 	if (bytes_avail < SMD_FIFO_FULL_RESERVE)
 		bytes_avail = 0;
 	else
 		bytes_avail -= SMD_FIFO_FULL_RESERVE;
-
-	BUG_ON(bytes_avail >= fifo_size);
 	return bytes_avail;
 }
 
@@ -1160,15 +1205,9 @@ static int read_intr_blocked(struct smd_channel *ch)
 /* advance the fifo read pointer after data from ch_read_buffer is consumed */
 static void ch_read_done(struct smd_channel *ch, unsigned count)
 {
-	unsigned tail = ch->half_ch->get_tail(ch->recv);
-	unsigned fifo_size = ch->fifo_size;
-
 	BUG_ON(count > smd_stream_read_avail(ch));
-
-	tail += count;
-	if (tail >= fifo_size)
-		tail -= fifo_size;
-	ch->half_ch->set_tail(ch->recv, tail);
+	ch->half_ch->set_tail(ch->recv,
+		(ch->half_ch->get_tail(ch->recv) + count) & ch->fifo_mask);
 	wmb();
 	ch->half_ch->set_fTAIL(ch->send,  1);
 }
@@ -1177,7 +1216,7 @@ static void ch_read_done(struct smd_channel *ch, unsigned count)
  * by smd_*_read() and update_packet_state()
  * will read-and-discard if the _data pointer is null
  */
-static int ch_read(struct smd_channel *ch, void *_data, int len)
+static int ch_read(struct smd_channel *ch, void *_data, int len, int user_buf)
 {
 	void *ptr;
 	unsigned n;
@@ -1192,7 +1231,7 @@ static int ch_read(struct smd_channel *ch, void *_data, int len)
 		if (n > len)
 			n = len;
 		if (_data)
-			ch->read_from_fifo(data, ptr, n);
+			ch->read_from_fifo(data, ptr, n, user_buf);
 
 		data += n;
 		len -= n;
@@ -1221,7 +1260,7 @@ static void update_packet_state(struct smd_channel *ch)
 		if (smd_stream_read_avail(ch) < SMD_HEADER_SIZE)
 			return;
 
-		r = ch_read(ch, hdr, SMD_HEADER_SIZE);
+		r = ch_read(ch, hdr, SMD_HEADER_SIZE, 0);
 		BUG_ON(r != SMD_HEADER_SIZE);
 
 		ch->current_packet = hdr[0];
@@ -1282,14 +1321,9 @@ static unsigned ch_write_buffer(struct smd_channel *ch, void **ptr)
  */
 static void ch_write_done(struct smd_channel *ch, unsigned count)
 {
-	unsigned head = ch->half_ch->get_head(ch->send);
-	unsigned fifo_size = ch->fifo_size;
-
 	BUG_ON(count > smd_stream_write_avail(ch));
-	head += count;
-	if (head >= fifo_size)
-		head -= fifo_size;
-	ch->half_ch->set_head(ch->send, head);
+	ch->half_ch->set_head(ch->send,
+		(ch->half_ch->get_head(ch->send) + count) & ch->fifo_mask);
 	wmb();
 	ch->half_ch->set_fHEAD(ch->send, 1);
 }
@@ -1340,7 +1374,6 @@ static void smd_state_change(struct smd_channel *ch,
 			ch->half_ch->set_tail(ch->recv, 0);
 			ch->half_ch->set_head(ch->send, 0);
 			ch->half_ch->set_fBLOCKREADINTR(ch->send, 0);
-			ch->current_packet = 0;
 			ch_set_state(ch, SMD_SS_OPENING);
 		}
 		break;
@@ -1357,6 +1390,7 @@ static void smd_state_change(struct smd_channel *ch,
 	case SMD_SS_CLOSED:
 		if (ch->half_ch->get_state(ch->send) == SMD_SS_OPENED) {
 			ch_set_state(ch, SMD_SS_CLOSING);
+			ch->current_packet = 0;
 			ch->pending_pkt_sz = 0;
 			ch->notify(ch->priv, SMD_EVENT_CLOSE);
 		}
@@ -1553,7 +1587,7 @@ static int smd_is_packet(struct smd_alloc_elm *alloc_elm)
 }
 
 static int smd_stream_write(smd_channel_t *ch, const void *_data, int len,
-				bool intr_ntfy)
+				int user_buf, bool intr_ntfy)
 {
 	void *ptr;
 	const unsigned char *buf = _data;
@@ -1574,7 +1608,7 @@ static int smd_stream_write(smd_channel_t *ch, const void *_data, int len,
 		if (xfer > len)
 			xfer = len;
 
-		ch->write_to_fifo(ptr, buf, xfer);
+		ch->write_to_fifo(ptr, buf, xfer, user_buf);
 		ch_write_done(ch, xfer);
 		len -= xfer;
 		buf += xfer;
@@ -1589,7 +1623,7 @@ static int smd_stream_write(smd_channel_t *ch, const void *_data, int len,
 }
 
 static int smd_packet_write(smd_channel_t *ch, const void *_data, int len,
-				bool intr_ntfy)
+				int user_buf, bool intr_ntfy)
 {
 	int ret;
 	unsigned hdr[5];
@@ -1607,7 +1641,7 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len,
 	hdr[1] = hdr[2] = hdr[3] = hdr[4] = 0;
 
 
-	ret = smd_stream_write(ch, hdr, sizeof(hdr), false);
+	ret = smd_stream_write(ch, hdr, sizeof(hdr), 0, false);
 	if (ret < 0 || ret != sizeof(hdr)) {
 		SMD_DBG("%s failed to write pkt header: %d returned\n",
 								__func__, ret);
@@ -1615,7 +1649,7 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len,
 	}
 
 
-	ret = smd_stream_write(ch, _data, len, true);
+	ret = smd_stream_write(ch, _data, len, user_buf, true);
 	if (ret < 0 || ret != len) {
 		SMD_DBG("%s failed to write pkt data: %d returned\n",
 								__func__, ret);
@@ -1625,14 +1659,14 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len,
 	return len;
 }
 
-static int smd_stream_read(smd_channel_t *ch, void *data, int len)
+static int smd_stream_read(smd_channel_t *ch, void *data, int len, int user_buf)
 {
 	int r;
 
 	if (len < 0)
 		return -EINVAL;
 
-	r = ch_read(ch, data, len);
+	r = ch_read(ch, data, len, user_buf);
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu(ch);
@@ -1640,7 +1674,7 @@ static int smd_stream_read(smd_channel_t *ch, void *data, int len)
 	return r;
 }
 
-static int smd_packet_read(smd_channel_t *ch, void *data, int len)
+static int smd_packet_read(smd_channel_t *ch, void *data, int len, int user_buf)
 {
 	unsigned long flags;
 	int r;
@@ -1657,7 +1691,7 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 	if (len > ch->current_packet)
 		len = ch->current_packet;
 
-	r = ch_read(ch, data, len);
+	r = ch_read(ch, data, len, user_buf);
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu(ch);
@@ -1670,7 +1704,8 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 	return r;
 }
 
-static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len)
+static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len,
+					int user_buf)
 {
 	int r;
 
@@ -1686,7 +1721,7 @@ static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len)
 	if (len > ch->current_packet)
 		len = ch->current_packet;
 
-	r = ch_read(ch, data, len);
+	r = ch_read(ch, data, len, user_buf);
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu(ch);
@@ -1761,9 +1796,9 @@ static int smd_alloc(struct smd_channel *ch, int table_id,
 		return -EINVAL;
 	}
 
-	/* buffer must be a multiple of 32 size */
-	if ((buffer_sz & (SZ_32 - 1)) != 0) {
-		SMD_INFO("Buffer size: %u not multiple of 32\n", buffer_sz);
+	/* buffer must be a power-of-two size */
+	if (buffer_sz & (buffer_sz - 1)) {
+		SMD_INFO("Buffer size: %u not power of two\n", buffer_sz);
 		return -EINVAL;
 	}
 	buffer_sz /= 2;
@@ -1801,6 +1836,8 @@ static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm, int table_id,
 		kfree(ch);
 		return -ENODEV;
 	}
+
+	ch->fifo_mask = ch->fifo_size - 1;
 
 	/* probe_worker guarentees ch->type will be a valid type */
 	if (ch->type == SMD_APPS_MODEM)
@@ -1841,7 +1878,8 @@ static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm, int table_id,
 		ch->write_to_fifo = smd_memcpy_to_fifo;
 	}
 
-	smd_memcpy_from_fifo(ch->name, alloc_elm->name, SMD_MAX_CH_NAME_LEN);
+	smd_memcpy_from_fifo(ch->name, alloc_elm->name, SMD_MAX_CH_NAME_LEN,
+									false);
 	ch->name[SMD_MAX_CH_NAME_LEN-1] = 0;
 
 	ch->pdev.name = ch->name;
@@ -1911,11 +1949,6 @@ int smd_named_open_on_edge(const char *name, uint32_t edge,
 {
 	struct smd_channel *ch;
 	unsigned long flags;
-
-	if (edge >= SMD_NUM_TYPE) {
-		pr_err("%s: edge:%d is invalid\n", __func__, edge);
-		return -EINVAL;
-	}
 
 	if (!smd_edge_inited(edge)) {
 		SMD_INFO("smd_open() before smd_init()\n");
@@ -1996,7 +2029,6 @@ EXPORT_SYMBOL(smd_named_open_on_edge);
 int smd_close(smd_channel_t *ch)
 {
 	unsigned long flags;
-	bool was_opened;
 
 	if (ch == 0)
 		return -EINVAL;
@@ -2006,10 +2038,9 @@ int smd_close(smd_channel_t *ch)
 	spin_lock_irqsave(&smd_lock, flags);
 	list_del(&ch->ch_list);
 
-	was_opened = ch->half_ch->get_state(ch->recv) == SMD_SS_OPENED;
 	ch_set_state(ch, SMD_SS_CLOSED);
 
-	if (was_opened) {
+	if (ch->half_ch->get_state(ch->recv) == SMD_SS_OPENED) {
 		list_add(&ch->ch_list, &smd_ch_closing_list);
 		spin_unlock_irqrestore(&smd_lock, flags);
 	} else {
@@ -2059,7 +2090,7 @@ int smd_write_start(smd_channel_t *ch, int len)
 	hdr[1] = hdr[2] = hdr[3] = hdr[4] = 0;
 
 
-	ret = smd_stream_write(ch, hdr, sizeof(hdr), true);
+	ret = smd_stream_write(ch, hdr, sizeof(hdr), 0, true);
 	if (ret < 0 || ret != sizeof(hdr)) {
 		ch->pending_pkt_sz = 0;
 		pr_err("%s: packet header failed to write\n", __func__);
@@ -2069,7 +2100,7 @@ int smd_write_start(smd_channel_t *ch, int len)
 }
 EXPORT_SYMBOL(smd_write_start);
 
-int smd_write_segment(smd_channel_t *ch, const void *data, int len)
+int smd_write_segment(smd_channel_t *ch, void *data, int len, int user_buf)
 {
 	int bytes_written;
 
@@ -2092,7 +2123,7 @@ int smd_write_segment(smd_channel_t *ch, const void *data, int len)
 		return -EINVAL;
 	}
 
-	bytes_written = smd_stream_write(ch, data, len, true);
+	bytes_written = smd_stream_write(ch, data, len, user_buf, true);
 
 	ch->pending_pkt_sz -= bytes_written;
 
@@ -2146,9 +2177,20 @@ int smd_read(smd_channel_t *ch, void *data, int len)
 		return -ENODEV;
 	}
 
-	return ch->read(ch, data, len);
+	return ch->read(ch, data, len, 0);
 }
 EXPORT_SYMBOL(smd_read);
+
+int smd_read_user_buffer(smd_channel_t *ch, void *data, int len)
+{
+	if (!ch) {
+		pr_err("%s: Invalid channel specified\n", __func__);
+		return -ENODEV;
+	}
+
+	return ch->read(ch, data, len, 1);
+}
+EXPORT_SYMBOL(smd_read_user_buffer);
 
 int smd_read_from_cb(smd_channel_t *ch, void *data, int len)
 {
@@ -2157,7 +2199,7 @@ int smd_read_from_cb(smd_channel_t *ch, void *data, int len)
 		return -ENODEV;
 	}
 
-	return ch->read_from_cb(ch, data, len);
+	return ch->read_from_cb(ch, data, len, 0);
 }
 EXPORT_SYMBOL(smd_read_from_cb);
 
@@ -2168,9 +2210,20 @@ int smd_write(smd_channel_t *ch, const void *data, int len)
 		return -ENODEV;
 	}
 
-	return ch->pending_pkt_sz ? -EBUSY : ch->write(ch, data, len, true);
+	return ch->pending_pkt_sz ? -EBUSY : ch->write(ch, data, len, 0, true);
 }
 EXPORT_SYMBOL(smd_write);
+
+int smd_write_user_buffer(smd_channel_t *ch, const void *data, int len)
+{
+	if (!ch) {
+		pr_err("%s: Invalid channel specified\n", __func__);
+		return -ENODEV;
+	}
+
+	return ch->pending_pkt_sz ? -EBUSY : ch->write(ch, data, len, 1, true);
+}
+EXPORT_SYMBOL(smd_write_user_buffer);
 
 int smd_read_avail(smd_channel_t *ch)
 {
@@ -3236,13 +3289,13 @@ int __init msm_smd_init(void)
 	if (registered)
 		return 0;
 
-	smd_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smd", 0);
+	smd_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smd");
 	if (!smd_log_ctx) {
 		pr_err("%s: unable to create SMD logging context\n", __func__);
 		msm_smd_debug_mask = 0;
 	}
 
-	smsm_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smsm", 0);
+	smsm_log_ctx = ipc_log_context_create(NUM_LOG_PAGES, "smsm");
 	if (!smsm_log_ctx) {
 		pr_err("%s: unable to create SMSM logging context\n", __func__);
 		msm_smd_debug_mask = 0;

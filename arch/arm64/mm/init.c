@@ -30,7 +30,6 @@
 #include <linux/memblock.h>
 #include <linux/sort.h>
 #include <linux/of_fdt.h>
-#include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
 
 #include <asm/sections.h>
@@ -67,22 +66,22 @@ static int __init early_initrd(char *p)
 }
 early_param("initrd", early_initrd);
 
+#define MAX_DMA32_PFN ((4UL * 1024 * 1024 * 1024) >> PAGE_SHIFT)
+
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	struct memblock_region *reg;
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
-	unsigned long max_dma = min;
+	unsigned long max_dma32 = min;
 
 	memset(zone_size, 0, sizeof(zone_size));
 
+#ifdef CONFIG_ZONE_DMA32
 	/* 4GB maximum for 32-bit only capable devices */
-	if (IS_ENABLED(CONFIG_ZONE_DMA)) {
-		unsigned long max_dma_phys =
-			(unsigned long)(dma_to_phys(NULL, DMA_BIT_MASK(32)) + 1);
-		max_dma = max(min, min(max, max_dma_phys >> PAGE_SHIFT));
-		zone_size[ZONE_DMA] = max_dma - min;
-	}
-	zone_size[ZONE_NORMAL] = max - max_dma;
+	max_dma32 = max(min, min(max, MAX_DMA32_PFN));
+	zone_size[ZONE_DMA32] = max_dma32 - min;
+#endif
+	zone_size[ZONE_NORMAL] = max - max_dma32;
 
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
 
@@ -92,15 +91,15 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 
 		if (start >= max)
 			continue;
-
-		if (IS_ENABLED(CONFIG_ZONE_DMA) && start < max_dma) {
-			unsigned long dma_end = min(end, max_dma);
-			zhole_size[ZONE_DMA] -= dma_end - start;
+#ifdef CONFIG_ZONE_DMA32
+		if (start < max_dma32) {
+			unsigned long dma_end = min(end, max_dma32);
+			zhole_size[ZONE_DMA32] -= dma_end - start;
 		}
-
-		if (end > max_dma) {
+#endif
+		if (end > max_dma32) {
 			unsigned long normal_end = min(end, max);
-			unsigned long normal_start = max(start, max_dma);
+			unsigned long normal_start = max(start, max_dma32);
 			zhole_size[ZONE_NORMAL] -= normal_end - normal_start;
 		}
 	}
@@ -133,7 +132,7 @@ static void arm64_memory_present(void)
 
 void __init arm64_memblock_init(void)
 {
-	phys_addr_t dma_phys_limit = 0;
+	u64 *reserve_map, base, size;
 
 	/* Register the kernel text, kernel data and initrd with memblock */
 	memblock_reserve(__pa(_text), _end - _text);
@@ -154,12 +153,26 @@ void __init arm64_memblock_init(void)
 	memblock_reserve(__pa(swapper_pg_dir), SWAPPER_DIR_SIZE);
 	memblock_reserve(__pa(idmap_pg_dir), IDMAP_DIR_SIZE);
 
-	early_init_fdt_scan_reserved_mem();
+	/* Reserve the dtb region */
+	memblock_reserve(virt_to_phys(initial_boot_params),
+			 be32_to_cpu(initial_boot_params->totalsize));
 
-	/* 4GB maximum for 32-bit only capable devices */
-	if (IS_ENABLED(CONFIG_ZONE_DMA))
-		dma_phys_limit = dma_to_phys(NULL, DMA_BIT_MASK(32)) + 1;
-	dma_contiguous_reserve(dma_phys_limit);
+	/*
+	 * Process the reserve map.  This will probably overlap the initrd
+	 * and dtb locations which are already reserved, but overlapping
+	 * doesn't hurt anything
+	 */
+	reserve_map = ((void*)initial_boot_params) +
+			be32_to_cpu(initial_boot_params->off_mem_rsvmap);
+	while (1) {
+		base = be64_to_cpup(reserve_map++);
+		size = be64_to_cpup(reserve_map++);
+		if (!size)
+			break;
+		memblock_reserve(base, size);
+	}
+
+	dma_contiguous_reserve(0);
 
 	memblock_allow_resize();
 	memblock_dump_all();
@@ -250,7 +263,7 @@ static void __init free_unused_memmap(void)
 		 * memmap entries are valid from the bank end aligned to
 		 * MAX_ORDER_NR_PAGES.
 		 */
-		prev_end = ALIGN(start + __phys_to_pfn(reg->size),
+		prev_end = ALIGN(__phys_to_pfn(reg->base + reg->size),
 				 MAX_ORDER_NR_PAGES);
 	}
 

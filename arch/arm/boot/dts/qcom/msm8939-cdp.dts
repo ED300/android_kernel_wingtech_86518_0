@@ -12,7 +12,6 @@
 
 /dts-v1/;
 
-#include "msm8939.dtsi"
 #include "msm8939-cdp.dtsi"
 
 / {

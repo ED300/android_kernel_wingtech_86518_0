@@ -20,7 +20,6 @@
 
 #include <stdarg.h>
 
-#include <linux/compat.h>
 #include <linux/export.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
@@ -73,17 +72,8 @@ static void setup_restart(void)
 
 void soft_restart(unsigned long addr)
 {
-	typedef void (*phys_reset_t)(unsigned long);
-	phys_reset_t phys_reset;
-
 	setup_restart();
-
-	/* Switch to the identity mapping */
-	phys_reset = (phys_reset_t)virt_to_phys(cpu_reset);
-	phys_reset(addr);
-
-	/* Should never get here */
-	BUG();
+	cpu_reset(addr);
 }
 
 /*
@@ -94,6 +84,11 @@ EXPORT_SYMBOL_GPL(pm_power_off);
 
 void (*arm_pm_restart)(enum reboot_mode reboot_mode, const char *cmd);
 EXPORT_SYMBOL_GPL(arm_pm_restart);
+
+void arch_cpu_idle_prepare(void)
+{
+	local_fiq_enable();
+}
 
 /*
  * This is our default idle handler.
@@ -110,16 +105,6 @@ void arch_cpu_idle(void)
 	}
 }
 
-void arch_cpu_idle_enter(void)
-{
-	idle_notifier_call_chain(IDLE_START);
-}
-
-void arch_cpu_idle_exit(void)
-{
-	idle_notifier_call_chain(IDLE_END);
-}
-
 #ifdef CONFIG_HOTPLUG_CPU
 void arch_cpu_idle_dead(void)
 {
@@ -127,62 +112,33 @@ void arch_cpu_idle_dead(void)
 }
 #endif
 
-/*
- * Called by kexec, immediately prior to machine_kexec().
- *
- * This must completely disable all secondary CPUs; simply causing those CPUs
- * to execute e.g. a RAM-based pin loop is not sufficient. This allows the
- * kexec'd kernel to use any and all RAM as it sees fit, without having to
- * avoid any code or data used by any SW CPU pin loop. The CPU hotplug
- * functionality embodied in disable_nonboot_cpus() to achieve this.
- */
 void machine_shutdown(void)
 {
-	disable_nonboot_cpus();
+#ifdef CONFIG_SMP
+	smp_send_stop();
+#endif
 }
 
-/*
- * Halting simply requires that the secondary CPUs stop performing any
- * activity (executing tasks, handling interrupts). smp_send_stop()
- * achieves this.
- */
 void machine_halt(void)
 {
-	local_irq_disable();
-	smp_send_stop();
+	machine_shutdown();
 	while (1);
 }
 
-/*
- * Power-off simply requires that the secondary CPUs stop performing any
- * activity (executing tasks, handling interrupts). smp_send_stop()
- * achieves this. When the system power is turned off, it will take all CPUs
- * with it.
- */
 void machine_power_off(void)
 {
-	local_irq_disable();
-	smp_send_stop();
+	machine_shutdown();
 	if (pm_power_off)
 		pm_power_off();
 }
 
-/*
- * Restart requires that the secondary CPUs stop performing any activity
- * while the primary CPU resets the system. Systems with a single CPU can
- * use soft_restart() as their machine descriptor's .restart hook, since that
- * will cause the only available CPU to reset. Systems with multiple CPUs must
- * provide a HW restart implementation, to ensure that all CPUs reset at once.
- * This is required so that any code running after reset on the primary CPU
- * doesn't have to co-ordinate with other CPUs to ensure they aren't still
- * executing pre-reset code, and using RAM that the primary CPU's code wishes
- * to use. Implementing such co-ordination would be essentially impossible.
- */
 void machine_restart(char *cmd)
 {
+	machine_shutdown();
+
 	/* Disable interrupts first */
 	local_irq_disable();
-	smp_send_stop();
+	local_fiq_disable();
 
 	/* Now call the architecture specific reboot code. */
 	if (arm_pm_restart)
@@ -193,63 +149,6 @@ void machine_restart(char *cmd)
 	 */
 	printk("Reboot failed -- System halted\n");
 	while (1);
-}
-
-/*
- * dump a block of kernel memory from around the given address
- */
-static void show_data(unsigned long addr, int nbytes, const char *name)
-{
-	int	i, j;
-	int	nlines;
-	u64	*p;
-
-	/*
-	 * don't attempt to dump non-kernel addresses or
-	 * values that are probably just small negative numbers
-	 */
-	if (addr < PAGE_OFFSET || addr > -256UL)
-		return;
-
-	printk("\n%s: %#lx:\n", name, addr);
-
-	/*
-	 * round address down to a 64 bit boundary
-	 * and always dump a multiple of 64 bytes
-	 */
-	p = (u64 *)(addr & ~(sizeof(u64) - 1));
-	nbytes += (addr & (sizeof(u64) - 1));
-	nlines = (nbytes + 63) / 64;
-
-	for (i = 0; i < nlines; i++) {
-		/*
-		 * just display low 16 bits of address to keep
-		 * each line of the dump < 80 characters
-		 */
-		printk("%04lx ", (unsigned long)p & 0xffff);
-		for (j = 0; j < 8; j++) {
-			u64 data;
-			/*
-			 * vmalloc addresses may point to
-			 * memory-mapped peripherals
-			 */
-			if (!virt_addr_valid(p) ||
-				 probe_kernel_address(p, data)) {
-				printk(" ********");
-			} else {
-				printk(KERN_CONT " %016llx", data);
-			}
-			++p;
-		}
-		printk(KERN_CONT "\n");
-	}
-}
-
-static void show_extra_register_data(struct pt_regs *regs, int nbytes)
-{
-	show_data(regs->pc - nbytes, nbytes * 2, "PC");
-	show_data(regs->regs[30] - nbytes, nbytes * 2, "LR");
-	show_data(regs->sp - nbytes, nbytes * 2, "SP");
 }
 
 void __show_regs(struct pt_regs *regs)
@@ -278,9 +177,6 @@ void __show_regs(struct pt_regs *regs)
 		if (i % 2 == 0)
 			printk("\n");
 	}
-	/* Dump only kernel mode */
-	if (get_fs() == get_ds())
-		show_extra_register_data(regs, 256);
 	printk("\n");
 }
 
@@ -297,9 +193,27 @@ void exit_thread(void)
 {
 }
 
+static void tls_thread_flush(void)
+{
+	asm ("msr tpidr_el0, xzr");
+
+	if (is_compat_task()) {
+		current->thread.tp_value = 0;
+
+		/*
+		 * We need to ensure ordering between the shadow state and the
+		 * hardware state, so that we don't corrupt the hardware state
+		 * with a stale shadow state during context switch.
+		 */
+		barrier();
+		asm ("msr tpidrro_el0, xzr");
+	}
+}
+
 void flush_thread(void)
 {
 	fpsimd_flush_thread();
+	tls_thread_flush();
 	flush_ptrace_hw_breakpoint(current);
 }
 
@@ -309,7 +223,7 @@ void release_thread(struct task_struct *dead_task)
 
 int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
 {
-	fpsimd_preserve_current_state();
+	fpsimd_save_state(&current->thread.fpsimd_state);
 	*dst = *src;
 	return 0;
 }
@@ -404,7 +318,7 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	 * Complete any pending TLB or cache maintenance on this CPU in case
 	 * the thread migrates to a different CPU.
 	 */
-	dsb(ish);
+	dsb();
 
 	/* the actual thread switch */
 	last = cpu_switch_to(prev, next);
@@ -415,7 +329,6 @@ struct task_struct *__switch_to(struct task_struct *prev,
 unsigned long get_wchan(struct task_struct *p)
 {
 	struct stackframe frame;
-	unsigned long stack_page;
 	int count = 0;
 	if (!p || p == current || p->state == TASK_RUNNING)
 		return 0;
@@ -423,11 +336,9 @@ unsigned long get_wchan(struct task_struct *p)
 	frame.fp = thread_saved_fp(p);
 	frame.sp = thread_saved_sp(p);
 	frame.pc = thread_saved_pc(p);
-	stack_page = (unsigned long)task_stack_page(p);
 	do {
-		if (frame.sp < stack_page ||
-		    frame.sp >= stack_page + THREAD_SIZE ||
-		    unwind_frame(&frame))
+		int ret = unwind_frame(&frame);
+		if (ret < 0)
 			return 0;
 		if (!in_sched_functions(frame.pc))
 			return frame.pc;
