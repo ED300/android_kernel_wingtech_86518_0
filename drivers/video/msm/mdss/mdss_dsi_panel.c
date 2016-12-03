@@ -23,8 +23,11 @@
 #include <linux/err.h>
 
 #include "mdss_dsi.h"
-#include "mdss_livedisplay.h"
 #include <linux/hardware_info.h> //req  wuzhenzhen.wt 20140924 add for hardware info
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/prevent_sleep.h>
+#endif
 
 #define DT_CMD_HDR 6
 
@@ -150,7 +153,7 @@ u32 mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	return 0;
 }
 
-void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
+static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_panel_cmds *pcmds)
 {
 	struct dcs_cmd_req cmdreq;
@@ -601,7 +604,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 extern bool s2w_scr_suspended;
 #endif
-
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
 extern bool dt2w_scr_suspended;
 #endif
@@ -610,6 +612,9 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	bool prevent_sleep = false;
+#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -629,21 +634,18 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
-
-    mdss_livedisplay_update(ctrl, MODE_UPDATE_ALL);
-
+	
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	s2w_scr_suspended = false;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+       ts_get_prevent_sleep(prevent_sleep);
+       if (prevent_sleep)
+	       dt2w_scr_suspended = false;
+#endif
 end:
 	pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
 	pr_debug("%s:-\n", __func__);
-	
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-       s2w_scr_suspended = false;
-#endif
-
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       dt2w_scr_suspended = false;
-#endif
-
 	return 0;
 }
 
@@ -651,6 +653,9 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	bool prevent_sleep = false;
+#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -676,13 +681,13 @@ end:
 	pr_debug("%s:-\n", __func__);
 	
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-       s2w_scr_suspended = true;
+	s2w_scr_suspended = true;
 #endif
-
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       dt2w_scr_suspended = true;
+       ts_get_prevent_sleep(prevent_sleep);
+       if (prevent_sleep)
+	       dt2w_scr_suspended = true;
 #endif
-
 	return 0;
 }
 
@@ -711,6 +716,7 @@ static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 		pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
 
 	pr_debug("%s:-\n", __func__);
+
 	return 0;
 }
 
@@ -758,7 +764,7 @@ static void mdss_dsi_parse_trigger(struct device_node *np, char *trigger,
 }
 
 
-int mdss_dsi_parse_dcs_cmds(struct device_node *np,
+static int mdss_dsi_parse_dcs_cmds(struct device_node *np,
 		struct dsi_panel_cmds *pcmds, char *cmd_key, char *link_key)
 {
 	const char *data;
@@ -1736,8 +1742,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	mdss_dsi_parse_panel_horizintal_line_idle(np, ctrl_pdata);
 
 	mdss_dsi_parse_dfps_config(np, ctrl_pdata);
-
-    mdss_livedisplay_parse_dt(np, pinfo);
 
 	return 0;
 

@@ -33,11 +33,6 @@
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-#include <linux/input/prevent_sleep.h>
-bool dit_suspend = false;
-#endif
-
 #include <linux/hardware_info.h>
 
 #if CTP_CHARGER_DETECT
@@ -52,6 +47,11 @@ bool dit_suspend = false;
 #include <linux/earlysuspend.h>
 /* Early-suspend level */
 #define FT_SUSPEND_LEVEL 1
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/prevent_sleep.h>
+bool dit_suspend = false;
 #endif
 
 #if CTP_PROC_INTERFACE
@@ -658,7 +658,6 @@ static int ft5x06_ts_suspend(struct device *dev)
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     char txbuf[2], i;
     int err;
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 	ts_get_prevent_sleep(prevent_sleep);
@@ -748,7 +747,6 @@ static int ft5x06_ts_resume(struct device *dev)
 {
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     int err;
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 	ts_get_prevent_sleep(prevent_sleep);
@@ -797,10 +795,6 @@ static int ft5x06_ts_resume(struct device *dev)
 
     enable_irq(data->client->irq);
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	} // if (prevent_sleep)
-#endif
-	
 #if CTP_CHARGER_DETECT
 		batt_psy = power_supply_get_by_name("usb");
 		if (!batt_psy)
@@ -817,6 +811,9 @@ static int ft5x06_ts_resume(struct device *dev)
 		pre_charger_status = is_charger_plug;
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	} // if (prevent_sleep)
+#endif
 
     data->suspended = false;
 
@@ -3089,14 +3086,12 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 
     err = request_threaded_irq(client->irq, NULL,
                                ft5x06_ts_interrupt,
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    pdata->irq_gpio_flags | IRQF_ONESHOT,
+                               pdata->irq_gpio_flags | IRQF_ONESHOT | IRQF_NO_SUSPEND,
 #else
-    IRQF_ONESHOT | IRQF_NO_SUSPEND,
+                               pdata->irq_gpio_flags | IRQF_ONESHOT,
 #endif
-    client->dev.driver->name, data);
-
+                               client->dev.driver->name, data);
     if (err)
     {
         dev_err(&client->dev, "request irq failed\n");
