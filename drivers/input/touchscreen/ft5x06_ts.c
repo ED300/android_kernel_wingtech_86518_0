@@ -661,6 +661,11 @@ static int ft5x06_ts_suspend(struct device *dev)
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 	ts_get_prevent_sleep(prevent_sleep);
+	if (prevent_sleep) {
+		/* disable the key panel touches */
+		__clear_bit(EV_KEY, data->input_dev->evbit);
+		input_sync(data->input_dev);
+	}
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
@@ -723,13 +728,13 @@ static int ft5x06_ts_suspend(struct device *dev)
         }
     }
 
-    data->suspended = true;
-
-    return 0;
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	} // if (prevent_sleep)
 #endif
+
+    data->suspended = true;
+
+    return 0;
 
 pwr_off_fail:
     if (gpio_is_valid(data->pdata->reset_gpio))
@@ -750,6 +755,11 @@ static int ft5x06_ts_resume(struct device *dev)
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	bool prevent_sleep = false;
 	ts_get_prevent_sleep(prevent_sleep);
+	if (prevent_sleep) {
+		/* enable the key panel touches back again */
+		__set_bit(EV_KEY, data->input_dev->evbit);
+		input_sync(data->input_dev);
+	}
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
@@ -842,7 +852,7 @@ static int ft5x06_ts_resume(struct device *dev)
 #endif
 
 #if defined(CONFIG_FB)
-
+static bool unblanked_once = false;
 static void fb_notify_resume_work(struct work_struct *work)
 {
        struct ft5x06_ts_data *ft5x06_data =
@@ -861,9 +871,14 @@ static int fb_notifier_callback(struct notifier_block *self,
         ft5x06_data && ft5x06_data->client)
     {
         blank = evdata->data;
-        if (*blank == FB_BLANK_UNBLANK)
+	if (*blank == FB_BLANK_UNBLANK || (*blank == FB_BLANK_VSYNC_SUSPEND)) {
+                    if (unblanked_once) {
+           pr_info("ft5x06 resume!\n");
            schedule_work(&ft5x06_data->fb_notify_work);
-         else if (*blank == FB_BLANK_POWERDOWN) {
+         } 
+      } else if (*blank == FB_BLANK_POWERDOWN) {
+                    unblanked_once = true;
+	    pr_info("ft5x06 suspend!\n");
             flush_work(&ft5x06_data->fb_notify_work);
             ft5x06_ts_suspend(&ft5x06_data->client->dev);
          }
@@ -2974,7 +2989,8 @@ static int ft5x06_ts_probe(struct i2c_client *client,
     if (err)
     {
         dev_err(&client->dev, "Input device registration failed\n");
-        goto free_inputdev;
+		input_free_device(input_dev);
+		return err;
     }
 
     if (pdata->power_init)
@@ -3282,9 +3298,6 @@ pwr_deinit:
         ft5x06_power_init(data, false);
 unreg_inputdev:
     input_unregister_device(input_dev);
-    input_dev = NULL;
-free_inputdev:
-    input_free_device(input_dev);
     return err;
 }
 
