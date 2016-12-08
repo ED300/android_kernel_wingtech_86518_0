@@ -738,13 +738,13 @@ static int ft5x06_ts_suspend(struct device *dev)
         }
     }
 
-    data->suspended = true;
-
-    return 0;
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	} // if (prevent_sleep)
 #endif
+
+    data->suspended = true;
+
+    return 0;
 
 pwr_off_fail:
     if (gpio_is_valid(data->pdata->reset_gpio))
@@ -869,10 +869,13 @@ static int fb_notifier_callback(struct notifier_block *self,
         ft5x06_data && ft5x06_data->client)
     {
         blank = evdata->data;
-        if (*blank == FB_BLANK_UNBLANK)
+	if (*blank == FB_BLANK_UNBLANK || (*blank == FB_BLANK_VSYNC_SUSPEND)) {
+           pr_info("ft5x06 resume!\n");
             ft5x06_ts_resume(&ft5x06_data->client->dev);
-        else if (*blank == FB_BLANK_POWERDOWN)
+      } else if (*blank == FB_BLANK_POWERDOWN) {
+	    pr_info("ft5x06 suspend!\n");
             ft5x06_ts_suspend(&ft5x06_data->client->dev);
+      }
     }
 
     return 0;
