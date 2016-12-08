@@ -634,6 +634,9 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+end:
+	pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
+	pr_debug("%s:-\n", __func__);
 	
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	s2w_scr_suspended = false;
@@ -643,9 +646,6 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
        if (prevent_sleep)
 	       dt2w_scr_suspended = false;
 #endif
-end:
-	pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
-	pr_debug("%s:-\n", __func__);
 	return 0;
 }
 
