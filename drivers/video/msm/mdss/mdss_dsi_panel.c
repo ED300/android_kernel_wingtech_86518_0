@@ -25,10 +25,6 @@
 #include "mdss_dsi.h"
 #include <linux/hardware_info.h> //req  wuzhenzhen.wt 20140924 add for hardware info
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-#include <linux/input/prevent_sleep.h>
-#endif
-
 #define DT_CMD_HDR 6
 
 /* NT35596 panel specific status variables */
@@ -612,9 +608,6 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	bool prevent_sleep = false;
-#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -639,12 +632,10 @@ end:
 	pr_debug("%s:-\n", __func__);
 	
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	s2w_scr_suspended = false;
+       s2w_scr_suspended = false;
 #endif
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       ts_get_prevent_sleep(prevent_sleep);
-       if (prevent_sleep)
-	       dt2w_scr_suspended = false;
+       dt2w_scr_suspended = false;
 #endif
 	return 0;
 }
@@ -653,9 +644,6 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	bool prevent_sleep = false;
-#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -681,12 +669,10 @@ end:
 	pr_debug("%s:-\n", __func__);
 	
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	s2w_scr_suspended = true;
+       s2w_scr_suspended = true;
 #endif
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       ts_get_prevent_sleep(prevent_sleep);
-       if (prevent_sleep)
-	       dt2w_scr_suspended = true;
+       dt2w_scr_suspended = true;
 #endif
 	return 0;
 }

@@ -35,11 +35,6 @@
 #include <linux/hrtimer.h>
 #include <asm-generic/cputime.h>
 
-#ifdef CONFIG_PSENSOR_ONDEMAND_STATE
-#include <linux/ltr553.h>
-extern int ltr553_ps_ondemand_state (void);
-#endif
-
 /* uncomment since no touchscreen defines android touch, do that here */
 //#define ANDROID_TOUCH_DECLARED
 
@@ -60,26 +55,19 @@ MODULE_VERSION(DRIVER_VERSION);
 MODULE_LICENSE("GPLv2");
 
 /* Tuneables */
+#define DT2W_DEBUG		1
 #define DT2W_DEFAULT		0
 
 #define DT2W_PWRKEY_DUR		60
 #define DT2W_TIME		700
 
-#define DT2W_OFF 0
-#define DT2W_ON 1
-
 /* Resources */
 int dt2w_switch = DT2W_DEFAULT;
 bool dt2w_scr_suspended = false;
-bool in_phone_call = false;
-int dt2w_sent_play_pause = 0;
 int dt2w_feather = 200, dt2w_feather_w = 1;
-#ifdef CONFIG_PSENSOR_ONDEMAND_STATE
-int dtw2_psensor_state = LTR553_ON_DEMAND_RESET;
-#endif
 static cputime64_t tap_time_pre = 0;
 static int touch_x = 0, touch_y = 0, touch_nr = 0, x_pre = 0, y_pre = 0;
-static bool touch_x_called = false, touch_y_called = false, touch_cnt = false;
+static bool touch_x_called = false, touch_y_called = false, touch_cnt = true;
 static bool exec_count = true;
 //static struct notifier_block dt2w_lcd_notif;
 static struct input_dev * doubletap2wake_pwrdev;
@@ -131,22 +119,6 @@ static void doubletap2wake_reset(void) {
 
 /* PowerKey work func */
 static void doubletap2wake_presspwr(struct work_struct * doubletap2wake_presspwr_work) {
-#ifdef CONFIG_PSENSOR_ONDEMAND_STATE
-	if (dtw2_psensor_state == LTR553_ON_DEMAND_COVERED) {
-#if DT2W_DEBUG
-	    pr_info("%s:%d -Proximity Sensor is covered, dt2w is ignored\n",
-		    __func__, __LINE__);
-#endif
-		dtw2_psensor_state = LTR553_ON_DEMAND_RESET;
-		return;
-	}
-	dtw2_psensor_state = LTR553_ON_DEMAND_RESET;
-#if DT2W_DEBUG
-	pr_info("%s:%d -Proximity Sensor is not covered, dt2w can wakeup device\n",
-		__func__, __LINE__);
-#endif
-#endif
-
 	if (!mutex_trylock(&pwrkeyworklock))
                 return;
 	input_event(doubletap2wake_pwrdev, EV_KEY, KEY_POWER, 1);
@@ -162,15 +134,6 @@ static DECLARE_WORK(doubletap2wake_presspwr_work, doubletap2wake_presspwr);
 
 /* PowerKey trigger */
 static void doubletap2wake_pwrtrigger(void) {
-#ifdef CONFIG_PSENSOR_ONDEMAND_STATE
-	/*
-	 * Prema Chand Alugu (premaca@gmail.com)
-	 * check the proximity sensor on demand.
-	 * The returned state should be checked when the
-	 * dt2w is actually performed.
-	 */
-	dtw2_psensor_state = ltr553_ps_ondemand_state();
-#endif
 	schedule_work(&doubletap2wake_presspwr_work);
         return;
 }
@@ -186,7 +149,7 @@ static unsigned int calc_feather(int coord, int prev_coord) {
 
 /* init a new touch */
 static void new_touch(int x, int y) {
-	tap_time_pre = ktime_to_ms(ktime_get_real());
+	tap_time_pre = ktime_to_ms(ktime_get());
 	x_pre = x;
 	y_pre = y;
 	touch_nr++;
@@ -197,11 +160,8 @@ static void detect_doubletap2wake(int x, int y, bool st)
 {
         bool single_touch = st;
 #if DT2W_DEBUG
-        pr_info(LOGTAG"x,y(%4d,%4d) single:%s dt2w_switch:%d exec_count:%s "
-		"touch_cnt:%s touch_nr=%d dt2w_feather_w:%d\n",
-                x, y, (single_touch) ? "true" : "false", dt2w_switch,
-                (exec_count) ? "true" : "false", (touch_cnt) ? "true" : "false",
-		touch_nr, dt2w_feather_w);
+        pr_info(LOGTAG"x,y(%4d,%4d) single:%s\n",
+                x, y, (single_touch) ? "true" : "false");
 #endif
 	if (dt2w_feather_w == 2)
 		dt2w_feather = 100;
@@ -216,26 +176,15 @@ static void detect_doubletap2wake(int x, int y, bool st)
 		} else if (touch_nr == 1) {
 			if ((calc_feather(x, x_pre) < dt2w_feather) &&
 			    (calc_feather(y, y_pre) < dt2w_feather) &&
-			    ((ktime_to_ms(ktime_get_real())-tap_time_pre) < DT2W_TIME)) {
+			    ((ktime_to_ms(ktime_get())-tap_time_pre) < DT2W_TIME))
 				touch_nr++;
-#if DT2W_DEBUG
-				pr_info(LOGTAG"touch_nr is now %d\n",touch_nr);
-#endif
-			} else {
+			else {
 				doubletap2wake_reset();
 				new_touch(x, y);
-#if DT2W_DEBUG
-				pr_info(LOGTAG"feather/time check failed, "
-					"reset&newtouch, touch_nr=%d\n",touch_nr);
-#endif
 			}
 		} else {
 			doubletap2wake_reset();
 			new_touch(x, y);
-#if DT2W_DEBUG
-			pr_info(LOGTAG"touch_nr was more than 1, "
-				"reset&newtouch, touch_nr=%d\n",touch_nr);
-#endif
 		}
 		if ((touch_nr > 1)) {
 			pr_info(LOGTAG"ON\n");
@@ -262,9 +211,6 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 		(code==ABS_MT_TRACKING_ID) ? "ID" :
 		"undef"), code, value);
 #endif
-	if (in_phone_call)
-		return;
-
 	if (!dt2w_scr_suspended)
 		return;
 
@@ -275,9 +221,7 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 
 	if (code == ABS_MT_TRACKING_ID && value == -1) {
 		touch_cnt = true;
-		if ((!touch_x_called) || (!touch_y_called)) {
-		    return;
-		}
+		return;
 	}
 
 	if (code == ABS_MT_POSITION_X) {
@@ -290,7 +234,7 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 		touch_y_called = true;
 	}
 
-	if ((touch_x_called || touch_y_called) && (touch_cnt)) {
+	if (touch_x_called || touch_y_called) {
 		touch_x_called = false;
 		touch_y_called = false;
 		queue_work_on(0, dt2w_input_wq, &dt2w_input_work);
@@ -388,34 +332,14 @@ static ssize_t dt2w_doubletap2wake_show(struct device *dev,
 static ssize_t dt2w_doubletap2wake_dump(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	unsigned int new_dt2w_switch;
+	if (buf[0] >= '0' && buf[0] <= '2' && buf[1] == '\n')
+                if (dt2w_switch != buf[0] - '0')
+		        dt2w_switch = buf[0] - '0';
 
-	if (!sscanf(buf, "%du", &new_dt2w_switch))
-		return -EINVAL;
-
-	if (new_dt2w_switch == dt2w_switch)
-		return count;
-
-	switch (new_dt2w_switch) {
-		case DT2W_OFF :
-		case DT2W_ON :
-			dt2w_switch = new_dt2w_switch;
-			/* through 'adb shell' or by other means, if the toggle
-			 * is done several times, 0-to-1, 1-to-0, we need to
-			 * inform the toggle correctly
-			 */
-			pr_info("[dump_dt2w]: DoubleTap2Wake toggled. | "
-					"dt2w='%d' \n", dt2w_switch);
-			return count;
-		default:
-			return -EINVAL;
-	}
-
-	/* We should never get here */
-	return -EINVAL;
+	return count;
 }
 
-static DEVICE_ATTR(doubletap2wake, 0666,
+static DEVICE_ATTR(doubletap2wake, (S_IWUSR|S_IRUGO),
 	dt2w_doubletap2wake_show, dt2w_doubletap2wake_dump);
 
 static ssize_t dt2w_feather_show(struct device *dev,
