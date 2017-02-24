@@ -149,8 +149,6 @@ static unsigned int *nr_run_profiles[] = {
 
 static unsigned int nr_run_last;
 static unsigned int down_lock_dur = DEFAULT_DOWN_LOCK_DUR;
-extern unsigned long avg_nr_running(void);
-extern unsigned long avg_cpu_nr_running(unsigned int cpu);
 
 struct down_lock {
 	unsigned int locked;
@@ -221,7 +219,7 @@ static void update_per_cpu_stat(void)
 
 	for_each_online_cpu(cpu) {
 		l_ip_info = &per_cpu(ip_info, cpu);
-		//l_ip_info->cpu_nr_running = avg_cpu_nr_running(cpu);
+		l_ip_info->cpu_nr_running = avg_cpu_nr_running(cpu);
 	}
 }
 

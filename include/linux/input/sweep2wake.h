@@ -22,6 +22,6 @@
 #define _LINUX_SWEEP2WAKE_H
 
 extern bool s2w_scr_suspended;
-extern int s2w_switch, s2w_s2sonly;
+extern int s2w_switch;
 
 #endif	/* _LINUX_SWEEP2WAKE_H */
