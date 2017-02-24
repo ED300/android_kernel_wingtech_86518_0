@@ -39,6 +39,7 @@
 #endif
 #include <linux/elan_interface.h>
 #include <linux/hardware_info.h>
+extern void sensor_prox_report(unsigned int detected);
 /*********************************************************
  * configuration
 *********************************************************/
@@ -501,6 +502,8 @@ static void elan_epl_ps_poll_rawdata(void)
 {
 	struct elan_epl_data *epld = epl_data;
 	struct i2c_client *client = epld->client;
+
+        sensor_prox_report((gRawData.raw_bytes[0] & 0x04) >> 2);
 
 	elan_sensor_I2C_Write(epld->client, REG_7, W_SINGLE_BYTE, 0x02,
 			      EPL_DATA_LOCK);

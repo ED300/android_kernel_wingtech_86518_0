@@ -25,6 +25,11 @@
 #include "mdss_dsi.h"
 #include <linux/hardware_info.h> //req  wuzhenzhen.wt 20140924 add for hardware info
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/prevent_sleep.h>
+extern bool prevent_sleep;
+#endif
+
 #define DT_CMD_HDR 6
 
 /* NT35596 panel specific status variables */
@@ -597,13 +602,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	}
 }
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-extern bool s2w_scr_suspended;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-extern bool dt2w_scr_suspended;
-#endif
-
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
@@ -613,6 +611,17 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+       ts_get_prevent_sleep(prevent_sleep);
+       if (prevent_sleep)
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+       dt2w_scr_suspended = false;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+       s2w_scr_suspended = false;
+#endif
+#endif
 
 	pinfo = &pdata->panel_info;
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
@@ -627,16 +636,11 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
+
 end:
 	pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
 	pr_debug("%s:-\n", __func__);
-	
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-       s2w_scr_suspended = false;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       dt2w_scr_suspended = false;
-#endif
+
 	return 0;
 }
 
@@ -664,16 +668,21 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
-end:
-	pinfo->blank_state = MDSS_PANEL_BLANK_BLANK;
-	pr_debug("%s:-\n", __func__);
-	
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-       s2w_scr_suspended = true;
-#endif
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+       ts_get_prevent_sleep(prevent_sleep);
+       if (prevent_sleep)
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
        dt2w_scr_suspended = true;
 #endif
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+       s2w_scr_suspended = true;
+#endif
+#endif
+
+end:
+	pinfo->blank_state = MDSS_PANEL_BLANK_BLANK;
+	pr_debug("%s:-\n", __func__);
+
 	return 0;
 }
 
