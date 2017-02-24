@@ -30,11 +30,6 @@
 
 #define TIMEOUT_MS 300
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-#include <linux/input/prevent_sleep.h>
-bool in_phone_call = false;
-#endif
-
 #define CMD_STATUS_SUCCESS 0
 #define CMD_STATUS_FAIL 1
 
@@ -4969,11 +4964,6 @@ int voc_end_voice_call(uint32_t session_id)
 	}
 	if (common.ec_ref_ext)
 		voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	in_phone_call = false;
-#endif	
-
 	mutex_unlock(&v->lock);	
 	return ret;
 }
@@ -5294,9 +5284,6 @@ int voc_start_voice_call(uint32_t session_id)
 		}
 
 		v->voc_state = VOC_RUN;
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	in_phone_call = true;
-#endif	
 	} else {
 		pr_err("%s: Error: Start voice called in state %d\n",
 			__func__, v->voc_state);

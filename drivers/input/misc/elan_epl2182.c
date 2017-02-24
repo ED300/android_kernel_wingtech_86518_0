@@ -39,6 +39,7 @@
 #endif
 #include <linux/elan_interface.h>
 #include <linux/hardware_info.h>
+extern void sensor_prox_report(unsigned int detected);
 /*********************************************************
  * configuration
 *********************************************************/
@@ -499,6 +500,8 @@ static void elan_epl_ps_poll_rawdata(void)
 {
 	struct elan_epl_data *epld = epl_data;
 	struct i2c_client *client = epld->client;
+
+        sensor_prox_report((gRawData.raw_bytes[0] & 0x04) >> 2);
 
 	elan_sensor_I2C_Write(epld->client, REG_7, W_SINGLE_BYTE, 0x02,
 			      EPL_DATA_LOCK);
@@ -1803,7 +1806,7 @@ static int elan_sensor_probe(struct i2c_client *client,
 	}
 
 	epl_info("sensor probe success.\n");
-	hardwareinfo_set_prop(HARDWARE_ALSPS,"elan2182");
+        hardwareinfo_set_prop(HARDWARE_ALSPS,"elan2182");
 	return err;
 
 exit_create_class_sysfs:
@@ -1825,7 +1828,7 @@ err_lightsensor_setup:
 err_create_singlethread_workqueue:
 i2c_fail:
 	kfree(epld);
-	hardwareinfo_set_prop(HARDWARE_ALSPS,"elan2182 fail");
+        hardwareinfo_set_prop(HARDWARE_ALSPS,"elan2182 fail");
 	return err;
 }
 

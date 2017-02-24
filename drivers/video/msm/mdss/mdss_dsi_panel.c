@@ -24,6 +24,11 @@
 #include "mdss_dsi.h"
 #include <linux/hardware_info.h> //req  wuzhenzhen.wt 20140924 add for hardware info
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/prevent_sleep.h>
+extern bool prevent_sleep;
+#endif
+
 #define DT_CMD_HDR 6
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
@@ -428,13 +433,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	}
 }
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-extern bool s2w_scr_suspended;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-extern bool dt2w_scr_suspended;
-#endif
-
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mipi_panel_info *mipi;
@@ -444,6 +442,17 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+       ts_get_prevent_sleep(prevent_sleep);
+       if (prevent_sleep)
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+       dt2w_scr_suspended = false;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+       s2w_scr_suspended = false;
+#endif
+#endif
 
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
@@ -455,12 +464,6 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
 	pr_debug("%s:-\n", __func__);
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-       s2w_scr_suspended = false;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       dt2w_scr_suspended = false;
-#endif
 	return 0;
 }
 
@@ -485,13 +488,18 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
 	pr_debug("%s:-\n", __func__);
-	
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+       ts_get_prevent_sleep(prevent_sleep);
+       if (prevent_sleep)
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+       dt2w_scr_suspended = true;
+#endif
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
        s2w_scr_suspended = true;
 #endif
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-       dt2w_scr_suspended = true;
-#endif	
+#endif
+
 	return 0;
 }
 

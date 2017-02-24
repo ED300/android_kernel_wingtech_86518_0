@@ -34,16 +34,16 @@
 #define MSM_HOTPLUG			"msm_hotplug"
 #define HOTPLUG_ENABLED			0
 #define DEFAULT_UPDATE_RATE		HZ / 10
-#define START_DELAY			HZ * 10
+#define START_DELAY			HZ * 20
 #define MIN_INPUT_INTERVAL		150 * 1000L
 #define DEFAULT_HISTORY_SIZE		10
 #define DEFAULT_DOWN_LOCK_DUR		1000
 #define DEFAULT_BOOST_LOCK_DUR		2500 * 1000L
-#define DEFAULT_NR_CPUS_BOOSTED		NR_CPUS / 2
+#define DEFAULT_NR_CPUS_BOOSTED		1
 #define DEFAULT_MIN_CPUS_ONLINE		1
 #define DEFAULT_MAX_CPUS_ONLINE		NR_CPUS
 /* cur_avg_load can be > 200! */
-#define DEFAULT_FAST_LANE_LOAD		95
+#define DEFAULT_FAST_LANE_LOAD		99
 #define DEFAULT_FAST_LANE_MIN_FREQ	1094000
 #define DEFAULT_SUSPEND_DEFER_TIME	10
 
@@ -126,6 +126,7 @@ static struct cpu_stats {
 	unsigned int total_cpus;
 	unsigned int online_cpus;
 	unsigned int cur_avg_load;
+	unsigned int cur_max_load;
 	struct mutex stats_mutex;
 } stats = {
 	.update_rates = default_update_rates,
@@ -220,6 +221,7 @@ static unsigned int load_at_max_freq(void)
 		max_load = max(max_load, pcpu->avg_load_maxfreq);
 		pcpu->avg_load_maxfreq = 0;
 	}
+	stats.cur_max_load = max_load;
 
 	return total_load;
 }
@@ -448,8 +450,7 @@ static void msm_hotplug_work(struct work_struct *work)
 
 	update_load_stats();
 
-	if ((stats.cur_avg_load >= hotplug.fast_lane_load) &&
-			(cpufreq_quick_get(0) >= hotplug.fast_lane_min_freq)) {
+	if (stats.cur_max_load >= hotplug.fast_lane_load) {
 		/* Enter the fast lane */
 		online_cpu(hotplug.max_cpus_online);
 		if (debug == 3)
@@ -1073,7 +1074,7 @@ static ssize_t store_history_size(struct device *dev,
 	if (hotplug.msm_enabled) {
 		flush_workqueue(hotplug_wq);
 		cancel_delayed_work_sync(&hotplug_work);
-		memset(stats.load_hist, 0, sizeof(stats.load_hist));
+		memset(stats.load_hist, sizeof(stats.load_hist), 0);
 	}
 
 	stats.hist_size = val;
