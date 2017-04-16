@@ -29,6 +29,7 @@
 
 #define TIMEOUT_MS 300
 
+
 #define CMD_STATUS_SUCCESS 0
 #define CMD_STATUS_FAIL 1
 
@@ -5206,6 +5207,7 @@ int voc_end_voice_call(uint32_t session_id)
 	}
 	if (common.ec_ref_ext)
 		voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
+
 	mutex_unlock(&v->lock);
 	return ret;
 }

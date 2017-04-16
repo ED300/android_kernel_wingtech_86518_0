@@ -658,21 +658,7 @@ static int ft5x06_ts_suspend(struct device *dev)
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
     char txbuf[2], i;
     int err;
-    
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
- * Copyright (c) 2016, Premaca <Premaca@xda.com>
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-	ts_get_prevent_sleep(prevent_sleep);
-	if (prevent_sleep) {
-		__clear_bit(EV_KEY, data->input_dev->evbit);
-		input_sync(data->input_dev);
-		enable_irq_wake(data->client->irq);		
-	} else {
-#endif
-	
+
     if (data->loading_fw)
     {
         dev_info(dev, "Firmware loading in process...\n");
@@ -684,6 +670,19 @@ static int ft5x06_ts_suspend(struct device *dev)
         dev_info(dev, "Already in suspend state\n");
         return 0;
     }
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
+ * Copyright (c) 2016, Premaca <Premaca@xda.com>
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+    ts_get_prevent_sleep(prevent_sleep);
+    if (prevent_sleep) {
+	__clear_bit(EV_KEY, data->input_dev->evbit);
+	input_sync(data->input_dev);
+    } else {
+#endif
 
     disable_irq(data->client->irq);
 
@@ -697,7 +696,7 @@ static int ft5x06_ts_suspend(struct device *dev)
     input_sync(data->input_dev);
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	}
+    }
 #endif
 
     if (gpio_is_valid(data->pdata->reset_gpio))
@@ -705,15 +704,20 @@ static int ft5x06_ts_suspend(struct device *dev)
         txbuf[0] = FT_REG_PMODE;
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
         txbuf[1] = (prevent_sleep) ? FT_PMODE_MONITOR : FT_PMODE_HIBERNATE;
+        err = ft5x06_i2c_write(data->client, txbuf, sizeof(txbuf));
 #else        
         txbuf[1] = FT_PMODE_HIBERNATE;
-#endif        
         err = ft5x06_i2c_write(data->client, txbuf, sizeof(txbuf));
+        gpio_set_value_cansleep(data->pdata->reset_gpio, 0);
+#endif        
         msleep(data->pdata->hard_rst_dly);
     }
 
+
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	if (!prevent_sleep) {
+    if (prevent_sleep) {
+        enable_irq_wake(data->client->irq);
+    }
 #endif
 
     if (data->pdata->power_on)
@@ -725,7 +729,11 @@ static int ft5x06_ts_suspend(struct device *dev)
             goto pwr_off_fail;
         }
     }
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    if (!prevent_sleep && !data->pdata->power_on)
+#else 
     else
+#endif
     {
         err = ft5x06_power_on(data, false);
         if (err)
@@ -736,10 +744,6 @@ static int ft5x06_ts_suspend(struct device *dev)
     }
 
     data->suspended = true;
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	}
-#endif
 
     return 0;
 
@@ -762,16 +766,6 @@ static int ft5x06_ts_resume(struct device *dev)
     char i;
     int err;
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
- * Copyright (c) 2016, Premaca <Premaca@xda.com>
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-	ts_get_prevent_sleep(prevent_sleep);
-	if (!prevent_sleep) {
-#endif
-	
     if (!data->suspended)
     {
         dev_dbg(dev, "Already in awake state\n");
@@ -788,7 +782,17 @@ static int ft5x06_ts_resume(struct device *dev)
             return err;
         }
     }
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
+ * Copyright (c) 2016, Premaca <Premaca@xda.com>
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+    ts_get_prevent_sleep(prevent_sleep);
+    if (!prevent_sleep && !data->pdata->power_on)
+#else 
     else
+#endif
     {
         err = ft5x06_power_on(data, true);
         if (err)
@@ -799,7 +803,17 @@ static int ft5x06_ts_resume(struct device *dev)
     }
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	}
+    if (prevent_sleep) {
+        disable_irq_wake(data->client->irq);
+    for (i = 0; i < data->pdata->num_max_touches; i++)
+    {
+        input_mt_slot(data->input_dev, i);
+        input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, 0);
+    }
+    input_mt_report_pointer_emulation(data->input_dev, false);
+    __set_bit(EV_KEY, data->input_dev->evbit);
+    input_sync(data->input_dev);
+    }
 #endif
 
     if (gpio_is_valid(data->pdata->reset_gpio))
@@ -812,20 +826,14 @@ static int ft5x06_ts_resume(struct device *dev)
     msleep(data->pdata->soft_rst_dly);
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	if (prevent_sleep) {	
-	        for (i = 0; i < data->pdata->num_max_touches; i++)
-              {
-                input_mt_slot(data->input_dev, i);
-                input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, 0);
-               }
-                input_mt_report_pointer_emulation(data->input_dev, false);	
-		__set_bit(EV_KEY, data->input_dev->evbit);
-		input_sync(data->input_dev);
-	        disable_irq_wake(data->client->irq);		
- 	} else {
+    if (!prevent_sleep) {
 #endif
 
     enable_irq(data->client->irq);
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    }
+#endif
 
 #if CTP_CHARGER_DETECT
 		batt_psy = power_supply_get_by_name("usb");
@@ -843,11 +851,8 @@ static int ft5x06_ts_resume(struct device *dev)
 		pre_charger_status = is_charger_plug;
 #endif
 
-	data->suspended = false;
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	}
-#endif
+    data->suspended = false;
 
     return 0;
 }
@@ -886,7 +891,6 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
     struct fb_event *evdata = data;
     int *blank;
-    static int u_blank;
     struct ft5x06_ts_data *ft5x06_data =
         container_of(self, struct ft5x06_ts_data, fb_notif);
 
@@ -894,12 +898,9 @@ static int fb_notifier_callback(struct notifier_block *self,
         ft5x06_data && ft5x06_data->client)
     {
         blank = evdata->data;
-	if (*blank == FB_BLANK_UNBLANK) {
-        if(u_blank) {
+        if (*blank == FB_BLANK_UNBLANK)
            schedule_work(&ft5x06_data->fb_notify_work);
-         } 
-      } else if (*blank == FB_BLANK_POWERDOWN) {
-            u_blank = 1;
+         else if (*blank == FB_BLANK_POWERDOWN) {
             flush_work(&ft5x06_data->fb_notify_work);
             ft5x06_ts_suspend(&ft5x06_data->client->dev);
          }
@@ -3010,8 +3011,7 @@ static int ft5x06_ts_probe(struct i2c_client *client,
     if (err)
     {
         dev_err(&client->dev, "Input device registration failed\n");
-		input_free_device(input_dev);
-		return err;
+        goto free_inputdev;
     }
 
     if (pdata->power_init)
@@ -3319,6 +3319,9 @@ pwr_deinit:
         ft5x06_power_init(data, false);
 unreg_inputdev:
     input_unregister_device(input_dev);
+    input_dev = NULL;
+free_inputdev:
+    input_free_device(input_dev);
     return err;
 }
 
