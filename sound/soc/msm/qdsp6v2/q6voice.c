@@ -29,6 +29,7 @@
 
 #define TIMEOUT_MS 300
 
+
 #define CMD_STATUS_SUCCESS 0
 #define CMD_STATUS_FAIL 1
 
@@ -5197,7 +5198,7 @@ int voc_end_voice_call(uint32_t session_id)
 		if (common.is_vote_bms) {
 			/* vote low power to BMS during call stop */
 			voice_vote_powerstate_to_bms(v, false);
-		}	
+		}
 	} else {
 		pr_err("%s: Error: End voice called in state %d\n",
 			__func__, v->voc_state);
@@ -5206,7 +5207,8 @@ int voc_end_voice_call(uint32_t session_id)
 	}
 	if (common.ec_ref_ext)
 		voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
-	mutex_unlock(&v->lock);	
+
+	mutex_unlock(&v->lock);
 	return ret;
 }
 

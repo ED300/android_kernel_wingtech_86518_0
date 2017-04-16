@@ -27,6 +27,8 @@
 #include <linux/input/doubletap2wake.h>
 #endif
 
+extern bool prevent_sleep;
+
 #if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) && defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
 #define ts_get_prevent_sleep(prevent_sleep) { \
 	prevent_sleep = (s2w_switch || dt2w_switch); \
