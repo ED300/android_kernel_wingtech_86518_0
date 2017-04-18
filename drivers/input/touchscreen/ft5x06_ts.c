@@ -717,7 +717,7 @@ static int ft5x06_ts_suspend(struct device *dev)
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
     if (prevent_sleep) {
         enable_irq_wake(data->client->irq);
-    }
+    } else {
 #endif
 
     if (data->pdata->power_on)
@@ -729,11 +729,7 @@ static int ft5x06_ts_suspend(struct device *dev)
             goto pwr_off_fail;
         }
     }
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    if (!prevent_sleep && !data->pdata->power_on)
-#else 
     else
-#endif
     {
         err = ft5x06_power_on(data, false);
         if (err)
@@ -742,6 +738,10 @@ static int ft5x06_ts_suspend(struct device *dev)
             goto pwr_off_fail;
         }
     }
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    }
+#endif
 
     data->suspended = true;
 
@@ -763,7 +763,9 @@ pwr_off_fail:
 static int ft5x06_ts_resume(struct device *dev)
 {
     struct ft5x06_ts_data *data = dev_get_drvdata(dev);
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
     char i;
+#endif    
     int err;
 
     if (!data->suspended)
@@ -772,6 +774,15 @@ static int ft5x06_ts_resume(struct device *dev)
         return 0;
     }
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
+ * Copyright (c) 2016, Premaca <Premaca@xda.com>
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+    ts_get_prevent_sleep(prevent_sleep);
+    if (!prevent_sleep) {
+#endif
 
     if (data->pdata->power_on)
     {
@@ -782,17 +793,7 @@ static int ft5x06_ts_resume(struct device *dev)
             return err;
         }
     }
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
- * Copyright (c) 2016, Premaca <Premaca@xda.com>
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-    ts_get_prevent_sleep(prevent_sleep);
-    if (!prevent_sleep && !data->pdata->power_on)
-#else 
     else
-#endif
     {
         err = ft5x06_power_on(data, true);
         if (err)
@@ -803,8 +804,8 @@ static int ft5x06_ts_resume(struct device *dev)
     }
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    if (prevent_sleep) {
-        disable_irq_wake(data->client->irq);
+    } else {
+    disable_irq_wake(data->client->irq);
     for (i = 0; i < data->pdata->num_max_touches; i++)
     {
         input_mt_slot(data->input_dev, i);
