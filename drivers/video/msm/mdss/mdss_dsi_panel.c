@@ -27,7 +27,6 @@
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 #include <linux/input/prevent_sleep.h>
-extern bool prevent_sleep;
 #endif
 
 #define DT_CMD_HDR 6
@@ -612,15 +611,11 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-       ts_get_prevent_sleep(prevent_sleep);
-       if (prevent_sleep)
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
        dt2w_scr_suspended = false;
 #endif
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
        s2w_scr_suspended = false;
-#endif
 #endif
 
 	pinfo = &pdata->panel_info;
@@ -668,15 +663,11 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-       ts_get_prevent_sleep(prevent_sleep);
-       if (prevent_sleep)
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
        dt2w_scr_suspended = true;
 #endif
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
        s2w_scr_suspended = true;
-#endif
 #endif
 
 end:
