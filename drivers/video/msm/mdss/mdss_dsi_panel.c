@@ -612,10 +612,10 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+       if (dt2w_switch > 0)
        dt2w_scr_suspended = false;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+       if (s2w_switch > 0)
        s2w_scr_suspended = false;
 #endif
 
@@ -666,10 +666,10 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+       if (dt2w_switch > 0)
        dt2w_scr_suspended = true;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+       if (s2w_switch > 0)
        s2w_scr_suspended = true;
 #endif
 
