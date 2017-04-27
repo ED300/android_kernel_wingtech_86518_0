@@ -683,7 +683,6 @@ static int ft5x06_ts_suspend(struct device *dev)
 	input_sync(data->input_dev);
     } else {
 #endif
-
     disable_irq(data->client->irq);
 
     /* release all touches */
@@ -694,7 +693,6 @@ static int ft5x06_ts_suspend(struct device *dev)
     }
     input_mt_report_pointer_emulation(data->input_dev, false);
     input_sync(data->input_dev);
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
     }
 #endif
@@ -703,21 +701,22 @@ static int ft5x06_ts_suspend(struct device *dev)
     {
         txbuf[0] = FT_REG_PMODE;
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-        txbuf[1] = (prevent_sleep) ? FT_PMODE_MONITOR : FT_PMODE_HIBERNATE;
+        txbuf[1] = (prevent_sleep) ? FT_PMODE_STANDBY : FT_PMODE_HIBERNATE;
         err = ft5x06_i2c_write(data->client, txbuf, sizeof(txbuf));
+    if (!prevent_sleep)
+        gpio_set_value_cansleep(data->pdata->reset_gpio, 0);
 #else        
         txbuf[1] = FT_PMODE_HIBERNATE;
         err = ft5x06_i2c_write(data->client, txbuf, sizeof(txbuf));
         gpio_set_value_cansleep(data->pdata->reset_gpio, 0);
-#endif        
+#endif
         msleep(data->pdata->hard_rst_dly);
     }
 
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    if (prevent_sleep) {
+    if (prevent_sleep)
         enable_irq_wake(data->client->irq);
-    } else {
 #endif
 
     if (data->pdata->power_on)
@@ -729,6 +728,10 @@ static int ft5x06_ts_suspend(struct device *dev)
             goto pwr_off_fail;
         }
     }
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    else if (prevent_sleep)
+            err = data->prevent_sleep;
+#endif
     else
     {
         err = ft5x06_power_on(data, false);
@@ -739,11 +742,11 @@ static int ft5x06_ts_suspend(struct device *dev)
         }
     }
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    }
-#endif
-
     data->suspended = true;
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    data->prevent_sleep = prevent_sleep;
+#endif
 
     return 0;
 
@@ -774,16 +777,6 @@ static int ft5x06_ts_resume(struct device *dev)
         return 0;
     }
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
- * Copyright (c) 2016, Premaca <Premaca@xda.com>
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-    ts_get_prevent_sleep(prevent_sleep);
-    if (!prevent_sleep) {
-#endif
-
     if (data->pdata->power_on)
     {
         err = data->pdata->power_on(true);
@@ -793,6 +786,10 @@ static int ft5x06_ts_resume(struct device *dev)
             return err;
         }
     }
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    else if (prevent_sleep)
+            err = data->prevent_sleep;
+#endif
     else
     {
         err = ft5x06_power_on(data, true);
@@ -804,7 +801,13 @@ static int ft5x06_ts_resume(struct device *dev)
     }
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    } else {
+/*
+ * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
+ * Copyright (c) 2016, Premaca <Premaca@xda.com>
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+    ts_get_prevent_sleep(prevent_sleep);
+    if (prevent_sleep) {
     disable_irq_wake(data->client->irq);
     for (i = 0; i < data->pdata->num_max_touches; i++)
     {
@@ -829,9 +832,7 @@ static int ft5x06_ts_resume(struct device *dev)
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
     if (!prevent_sleep) {
 #endif
-
     enable_irq(data->client->irq);
-
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
     }
 #endif
@@ -854,6 +855,10 @@ static int ft5x06_ts_resume(struct device *dev)
 
 
     data->suspended = false;
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    data->prevent_sleep = prevent_sleep;
+#endif
 
     return 0;
 }
