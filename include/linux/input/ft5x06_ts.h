@@ -250,6 +250,9 @@ struct ft5x06_ts_data
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
     struct early_suspend early_suspend;
 #endif
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+    bool prevent_sleep;
+#endif
     struct pinctrl *ts_pinctrl;
     struct pinctrl_state *gpio_state_active;
     struct pinctrl_state *gpio_state_suspend;

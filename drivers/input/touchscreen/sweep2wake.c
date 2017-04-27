@@ -26,7 +26,7 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/err.h>
-#include <linux/input/prevent_sleep.h>
+#include <linux/input/sweep2wake.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/input.h>
@@ -64,9 +64,6 @@ MODULE_LICENSE("GPLv2");
 #define S2W_X_B1                130
 #define S2W_X_B2                360
 #define S2W_X_FINAL             160
-
-/* Sensors */
-static bool flg_sensor_prox_detecting = false;
 
 /* Resources */
 int s2w_switch = S2W_DEFAULT;
@@ -205,9 +202,6 @@ static void s2w_input_event(struct input_handle *handle, unsigned int type,
 		(code==ABS_MT_TRACKING_ID) ? "ID" :
 		"undef"), code, value);
 #endif
-        if (flg_sensor_prox_detecting)
-		return;
-
 	if (code == ABS_MT_SLOT) {
 		sweep2wake_reset();
 		return;

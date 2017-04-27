@@ -26,7 +26,7 @@
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/err.h>
-#include <linux/input/prevent_sleep.h>
+#include <linux/input/doubletap2wake.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/input.h>
@@ -68,9 +68,6 @@ MODULE_LICENSE("GPLv2");
 #define DT2W_X_MAX              720
 #define DT2W_Y_LIMIT 		DT2W_Y_MAX-65
 #define DT2W_X_LIMIT 		DT2W_X_MAX-65
-
-/* Sensors */
-static bool flg_sensor_prox_detecting = false;
 
 /* Resources */
 int dt2w_switch = DT2W_DEFAULT;
@@ -223,9 +220,6 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 		(code==ABS_MT_TRACKING_ID) ? "ID" :
 		"undef"), code, value);
 #endif
-        if (flg_sensor_prox_detecting)
-		return;
-		
 	if (!dt2w_scr_suspended)
 		return;
 
@@ -346,21 +340,6 @@ static int lcd_notifier_callback(struct notifier_block *this,
 	return 0;
 }
 #endif
-
-/* sensor proprites */
-void sensor_prox_report(unsigned int detected)
-{
-	if (detected) {
-		pr_info(LOGTAG"/sensor_prox_report] prox covered\n");
-		flg_sensor_prox_detecting = true;
-		
-	} else {
-		flg_sensor_prox_detecting = false;
-		pr_info(LOGTAG"/sensor_prox_report] prox uncovered\n");
-	}
-}
-EXPORT_SYMBOL(sensor_prox_report);
-
 
 /*
  * SYSFS stuff below here
