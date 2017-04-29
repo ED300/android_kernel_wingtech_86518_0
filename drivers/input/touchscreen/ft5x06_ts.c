@@ -729,8 +729,8 @@ static int ft5x06_ts_suspend(struct device *dev)
         }
     }
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    else if (prevent_sleep)
-            err = data->prevent_sleep;
+    else if (data->prevent_sleep)
+             err = prevent_sleep != data->prevent_sleep;
 #endif
     else
     {
@@ -786,10 +786,6 @@ static int ft5x06_ts_resume(struct device *dev)
             return err;
         }
     }
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    else if (prevent_sleep)
-            err = data->prevent_sleep;
-#endif
     else
     {
         err = ft5x06_power_on(data, true);
@@ -855,10 +851,6 @@ static int ft5x06_ts_resume(struct device *dev)
 
 
     data->suspended = false;
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    data->prevent_sleep = prevent_sleep;
-#endif
 
     return 0;
 }
