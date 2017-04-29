@@ -23,7 +23,7 @@
 #include <linux/err.h>
 
 #include "mdss_dsi.h"
-#include <linux/hardware_info.h> //req  wuzhenzhen.wt 20140924 add for hardware info
+#include <linux/hardware_info.h>
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 #include <linux/input/prevent_sleep.h>
@@ -39,9 +39,9 @@
 
 #define MIN_REFRESH_RATE 30
 
-DEFINE_LED_TRIGGER(bl_led_trigger);
+extern char Lcm_name[HARDWARE_MAX_ITEM_LONGTH];
 
-extern bool is_Lcm_Present;//heming@wingtech.com,20140730, disable lcm backlight when lcm is not connected
+DEFINE_LED_TRIGGER(bl_led_trigger);
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -173,6 +173,8 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	/*Panel ON/Off commands should be sent in DSI Low Power Mode*/
 	if (pcmds->link_state == DSI_LP_MODE)
 		cmdreq.flags  |= CMD_REQ_LP_MODE;
+	else if (pcmds->link_state == DSI_HS_MODE)
+		cmdreq.flags |= CMD_REQ_HS_MODE;
 
 	cmdreq.rlen = 0;
 	cmdreq.cb = NULL;
@@ -335,6 +337,7 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 		gpio_free(ctrl_pdata->rst_gpio);
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
+		usleep(3000);
 	}
 	return rc;
 }
@@ -1036,51 +1039,6 @@ static int mdss_dsi_parse_reset_seq(struct device_node *np,
 	return 0;
 }
 
-#if 0
-static int mdss_dsi_gen_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
-{
-	if (ctrl_pdata->status_buf.data[0] !=
-					ctrl_pdata->status_value) {
-		pr_err("%s: Read back value from panel is incorrect\n",
-							__func__);
-		return -EINVAL;
-	} else {
-		return 1;
-	}
-}
-
-static int mdss_dsi_nt35596_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
-{
-	if (ctrl_pdata->status_buf.data[0] !=
-					ctrl_pdata->status_value) {
-		ctrl_pdata->status_error_count = 0;
-		pr_err("%s: Read back value from panel is incorrect\n",
-							__func__);
-		return -EINVAL;
-	} else {
-		if (ctrl_pdata->status_buf.data[3] != NT35596_BUF_3_STATUS) {
-			ctrl_pdata->status_error_count = 0;
-		} else {
-			if ((ctrl_pdata->status_buf.data[4] ==
-				NT35596_BUF_4_STATUS) ||
-				(ctrl_pdata->status_buf.data[5] ==
-				NT35596_BUF_5_STATUS))
-				ctrl_pdata->status_error_count = 0;
-			else
-				ctrl_pdata->status_error_count++;
-			if (ctrl_pdata->status_error_count >=
-					NT35596_MAX_ERR_CNT) {
-				ctrl_pdata->status_error_count = 0;
-				pr_err("%s: Read value bad. Error_cnt = %i\n",
-					 __func__,
-					ctrl_pdata->status_error_count);
-				return -EINVAL;
-			}
-		}
-		return 1;
-	}
-}
-#endif
 static void mdss_dsi_parse_roi_alignment(struct device_node *np,
 		struct mdss_panel_info *pinfo)
 {
@@ -1657,6 +1615,9 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-init-delay-us", &tmp);
 	pinfo->mipi.init_delay = (!rc ? tmp : 0);
 
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-post-init-delay", &tmp);
+	pinfo->mipi.post_init_delay = (!rc ? tmp : 0);
+
 	mdss_dsi_parse_roi_alignment(np, pinfo);
 
 	mdss_dsi_parse_trigger(np, &(pinfo->mipi.mdp_trigger),
@@ -1719,6 +1680,12 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		}
 	}
 
+	pinfo->mipi.force_clk_lane_hs = of_property_read_bool(np,
+		"qcom,mdss-dsi-force-clock-lane-hs");
+
+	pinfo->mipi.always_on = of_property_read_bool(np,
+		"qcom,mdss-dsi-always-on");
+
 	rc = mdss_dsi_parse_panel_features(np, ctrl_pdata);
 	if (rc) {
 		pr_err("%s: failed to parse panel features\n", __func__);
@@ -1735,7 +1702,6 @@ error:
 	return -EINVAL;
 }
 
-extern char Lcm_name[HARDWARE_MAX_ITEM_LONGTH]; //req  wuzhenzhen.wt 20140924 add for hardware info
 int mdss_dsi_panel_init(struct device_node *node,
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 	bool cmd_cfg_cont_splash)
@@ -1760,7 +1726,6 @@ int mdss_dsi_panel_init(struct device_node *node,
 	} else {
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
-		strcpy(Lcm_name,panel_name);//req  wuzhenzhen.wt 20140924 add for hardware info
 	}
 	rc = mdss_panel_parse_dt(node, ctrl_pdata);
 	if (rc) {
@@ -1780,10 +1745,7 @@ int mdss_dsi_panel_init(struct device_node *node,
 	ctrl_pdata->on = mdss_dsi_panel_on;
 	ctrl_pdata->off = mdss_dsi_panel_off;
 	ctrl_pdata->low_power_config = mdss_dsi_panel_low_power_config;
-	if(is_Lcm_Present)//heming@wingtech.com,20140730, disable lcm backlight when lcm is not connected
-	{
-		ctrl_pdata->panel_data.set_backlight = mdss_dsi_panel_bl_ctrl;
-	}
+	ctrl_pdata->panel_data.set_backlight = mdss_dsi_panel_bl_ctrl;
 	ctrl_pdata->switch_mode = mdss_dsi_panel_switch_mode;
 
 	return 0;

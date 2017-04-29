@@ -284,12 +284,14 @@ struct mipi_panel_info {
 	char no_max_pkt_size;
 	/* Clock required during LP commands */
 	char force_clk_lane_hs;
+	bool always_on;
 
 	char vsync_enable;
 	char hw_vsync_mode;
 
 	char lp11_init;
 	u32  init_delay;
+	u32  post_init_delay;
 };
 
 struct edp_panel_info {
