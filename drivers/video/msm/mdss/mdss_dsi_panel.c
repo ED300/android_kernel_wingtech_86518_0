@@ -28,7 +28,14 @@
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 #include <linux/input/prevent_sleep.h>
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/input/sweep2wake.h>
 #endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
+#endif
+
 
 #define DT_CMD_HDR 6
 
@@ -610,16 +617,31 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) || defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	bool prevent_sleep = false;
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+	prevent_sleep = (s2w_switch > 0);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	prevent_sleep = prevent_sleep || (dt2w_switch > 0);
+#endif
+        if (prevent_sleep && in_phone_call)
+	    prevent_sleep = false;
+#endif
+
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-       if (dt2w_switch > 0)
-       dt2w_scr_suspended = false;
-       if (s2w_switch > 0)
-       s2w_scr_suspended = false;
+        if (prevent_sleep)
+            scr_suspended = false;
 #endif
 
 	pinfo = &pdata->panel_info;
@@ -635,7 +657,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
-   
+
     mdss_livedisplay_update(ctrl, MODE_UPDATE_ALL);
 
 end:
@@ -649,6 +671,23 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 	struct mdss_panel_info *pinfo;
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) || defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	bool prevent_sleep = false;
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+	prevent_sleep = (s2w_switch > 0);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	prevent_sleep = prevent_sleep || (dt2w_switch > 0);
+#endif
+        if (prevent_sleep && in_phone_call)
+	    prevent_sleep = false;
+#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -670,10 +709,8 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-       if (dt2w_switch > 0)
-       dt2w_scr_suspended = true;
-       if (s2w_switch > 0)
-       s2w_scr_suspended = true;
+        if (prevent_sleep)
+            scr_suspended = true;
 #endif
 
 end:

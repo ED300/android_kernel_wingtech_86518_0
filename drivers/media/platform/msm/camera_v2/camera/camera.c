@@ -32,6 +32,10 @@
 #include "msm.h"
 #include "msm_vb2.h"
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+bool in_camera = false;
+#endif
+
 #define fh_to_private(__fh) \
 	container_of(__fh, struct camera_v4l2_private, fh)
 
@@ -667,7 +671,7 @@ static int camera_v4l2_close(struct file *filep)
 		camera_pack_event(filep, MSM_CAMERA_DEL_SESSION, 0, -1, &event);
 
 		/* Donot wait, imaging server may have crashed */
-		msm_post_event(&event, -1);
+		msm_post_event(&event, MSM_POST_EVT_TIMEOUT);
 		msm_delete_command_ack_q(pvdev->vdev->num, 0);
 
 		/* This should take care of both normal close
@@ -689,6 +693,13 @@ static int camera_v4l2_close(struct file *filep)
 
 	camera_v4l2_vb2_q_release(filep);
 	camera_v4l2_fh_release(filep);
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+        in_camera = true;
+#endif
 
 	return rc;
 }

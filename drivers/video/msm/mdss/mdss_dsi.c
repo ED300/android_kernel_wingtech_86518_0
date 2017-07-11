@@ -30,9 +30,18 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/prevent_sleep.h>
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/input/sweep2wake.h>
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
+#endif
+
 #define XO_CLK_RATE	19200000
 
-bool is_Lcm_Present = false;//heming@wingtech.com,20140730, disable lcm backlight when lcm is not connected
 
 #define DSI_DISABLE_PC_LATENCY 100
 #define DSI_ENABLE_PC_LATENCY PM_QOS_DEFAULT_VALUE
@@ -97,6 +106,23 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int i = 0;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) || defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	bool prevent_sleep = false;
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+	prevent_sleep = (s2w_switch > 0);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	prevent_sleep = prevent_sleep || (dt2w_switch > 0);
+#endif
+        if (prevent_sleep && in_camera)
+	    prevent_sleep = false;
+#endif
+
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
 		ret = -EINVAL;
@@ -131,12 +157,18 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 		 */
 		if (DSI_CORE_PM == i)
 			continue;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+                if (!prevent_sleep) {
+#endif
 		ret = msm_dss_enable_vreg(
 			ctrl_pdata->power_data[i].vreg_config,
 			ctrl_pdata->power_data[i].num_vreg, 0);
 		if (ret)
 			pr_err("%s: failed to disable vregs for %s\n",
 				__func__, __mdss_dsi_pm_name(i));
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+                }
+#endif
 	}
 
 end:
@@ -149,13 +181,22 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int i = 0;
 
-	/*heming add to power off panel while LCM initaltion fail, Begin*/
-	if(!is_Lcm_Present)
-	{
-		pr_err("%s: LCM not connect do not enable lcm power\n", __func__);
-		return -EINVAL;
-	}
-	/*heming add to power off panel while LCM initaltion fail, End*/	
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) || defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	bool prevent_sleep = false;
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+	prevent_sleep = (s2w_switch > 0);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	prevent_sleep = prevent_sleep || (dt2w_switch > 0);
+#endif
+        if (prevent_sleep && in_camera)
+	    prevent_sleep = false;
+#endif
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -172,6 +213,9 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 		 */
 		if (DSI_CORE_PM == i)
 			continue;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+                if (!prevent_sleep) {
+#endif
 		ret = msm_dss_enable_vreg(
 			ctrl_pdata->power_data[i].vreg_config,
 			ctrl_pdata->power_data[i].num_vreg, 1);
@@ -180,6 +224,9 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata)
 				__func__, __mdss_dsi_pm_name(i));
 			goto error;
 		}
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+                }
+#endif
 	}
 	if (ctrl_pdata->panel_bias_vreg) {
 		pr_debug("%s: Enable panel bias vreg. ndx = %d\n",
@@ -1300,7 +1347,8 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		ctrl_pdata->ctrl_state &= ~CTRL_STATE_MDP_ACTIVE;
 		if (ctrl_pdata->off_cmds.link_state == DSI_LP_MODE)
 			rc = mdss_dsi_blank(pdata, power_state);
-		rc = mdss_dsi_off(pdata, power_state);
+		if (!(pdata->panel_info.mipi.always_on))
+			rc = mdss_dsi_off(pdata, power_state);
 		break;
 	case MDSS_EVENT_CONT_SPLASH_FINISH:
 		if (ctrl_pdata->off_cmds.link_state == DSI_LP_MODE)
@@ -1437,13 +1485,11 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 			       __func__);
 			goto end;
 		}
-		is_Lcm_Present = true;//heming@wingtech.com,20140730, disable lcm backlight when lcmis not connected
 		return dsi_pan_node;
 	}
 end:
 	if (strcmp(panel_name, NONE_PANEL))
 		dsi_pan_node = mdss_dsi_pref_prim_panel(pdev);
-	is_Lcm_Present = false;//heming@wingtech.com,20140730, disable lcm backlight when lcm is notconnected
 	return dsi_pan_node;
 }
 
@@ -1981,7 +2027,8 @@ int dsi_panel_device_register(struct device_node *pan_node,
 			pr_err("%s: Panel power on failed\n", __func__);
 			return rc;
 		}
-
+		if (ctrl_pdata->bklt_ctrl == BL_PWM)
+			ctrl_pdata->pwm_enabled = 1;
 		pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
 		ctrl_pdata->ctrl_state |=
