@@ -67,7 +67,7 @@ MODULE_LICENSE("GPLv2");
 
 /* Resources */
 int s2w_switch = S2W_DEFAULT;
-bool s2w_scr_suspended = false;
+bool scr_suspended = false;
 static int touch_x = 0, touch_y = 0;
 static bool touch_x_called = false, touch_y_called = false;
 static bool exec_count = true, scr_on_touch = false, barrier[2] = {false, false};
@@ -136,14 +136,14 @@ static void detect_sweep2wake(int x, int y, bool st)
                 x, y, (single_touch) ? "true" : "false");
 #endif
 #if S2W_DEBUG
-        pr_info(LOGTAG"src: %s\n.", (s2w_scr_suspended) ? "true":"false");
+        pr_info(LOGTAG"src: %s\n.", (scr_suspended) ? "true":"false");
 #endif
 	if (x < 65 || x > sweep_x_limit)
 		return;
 	if (y < 65 || y > sweep_y_limit)
 		return;
 
-	if ((single_touch) && (s2w_scr_suspended == true) && (s2w_switch > 0)) {
+	if ((single_touch) && (scr_suspended == true) && (s2w_switch > 0)) {
 		prevx = 0;
 		nextx = S2W_X_B1;
 		if ((barrier[0] == true) ||
@@ -290,11 +290,11 @@ static struct input_handler s2w_input_handler = {
 
 #ifdef CONFIG_POWERSUSPEND
 static void s2w_power_suspend(struct power_suspend *h) {
-	s2w_scr_suspended = true;
+	scr_suspended = true;
 }
 
 static void s2w_power_resume(struct power_suspend *h) {
-	s2w_scr_suspended = false;
+	scr_suspended = false;
 }
 
 static struct power_suspend s2w_power_suspend_handler = {
@@ -307,10 +307,10 @@ static int lcd_notifier_callback(struct notifier_block *this,
 {
 	switch (event) {
 	case LCD_EVENT_ON_END:
-		s2w_scr_suspended = false;
+		scr_suspended = false;
 		break;
 	case LCD_EVENT_OFF_END:
-		s2w_scr_suspended = true;
+		scr_suspended = true;
 		break;
 	default:
 		break;

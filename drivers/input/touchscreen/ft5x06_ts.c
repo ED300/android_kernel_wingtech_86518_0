@@ -50,9 +50,14 @@
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-#include <linux/input/prevent_sleep.h>
-bool prevent_sleep = false;
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/input/sweep2wake.h>
 #endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
+#endif
+
 
 #if CTP_PROC_INTERFACE
 #include "ft5x06_test_lib.h"
@@ -674,6 +679,21 @@ static int ft5x06_ts_suspend(struct device *dev)
     char txbuf[2], i;
     int err;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) || defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	bool prevent_sleep = false;
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+	prevent_sleep = (s2w_switch > 0);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	prevent_sleep = prevent_sleep || (dt2w_switch > 0);
+#endif
+#endif
+
     if (data->loading_fw)
     {
         dev_info(dev, "Firmware loading in process...\n");
@@ -687,12 +707,6 @@ static int ft5x06_ts_suspend(struct device *dev)
     }
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
- * Copyright (c) 2016, Premaca <Premaca@xda.com>
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-    ts_get_prevent_sleep(prevent_sleep);
     if (prevent_sleep) {
 	__clear_bit(EV_KEY, data->input_dev->evbit);
 	input_sync(data->input_dev);
@@ -743,10 +757,6 @@ static int ft5x06_ts_suspend(struct device *dev)
             goto pwr_off_fail;
         }
     }
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    else if (data->prevent_sleep)
-             err = prevent_sleep != data->prevent_sleep;
-#endif
     else
     {
         err = ft5x06_power_on(data, false);
@@ -758,10 +768,6 @@ static int ft5x06_ts_suspend(struct device *dev)
     }
 
     data->suspended = true;
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    data->prevent_sleep = prevent_sleep;
-#endif
 
     return 0;
 
@@ -786,12 +792,26 @@ static int ft5x06_ts_resume(struct device *dev)
 #endif    
     int err;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) || defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	bool prevent_sleep = false;
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+	prevent_sleep = (s2w_switch > 0);
+#endif
+#if defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	prevent_sleep = prevent_sleep || (dt2w_switch > 0);
+#endif
+#endif
+
     if (!data->suspended)
     {
         dev_dbg(dev, "Already in awake state\n");
         return 0;
     }
-
 
     if (data->pdata->power_on)
     {
@@ -813,22 +833,16 @@ static int ft5x06_ts_resume(struct device *dev)
     }
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2015, Vineeth Raj <thewisenerd@protonmail.com>
- * Copyright (c) 2016, Premaca <Premaca@xda.com>
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-    ts_get_prevent_sleep(prevent_sleep);
     if (prevent_sleep) {
-    disable_irq_wake(data->client->irq);
-    for (i = 0; i < data->pdata->num_max_touches; i++)
-    {
-        input_mt_slot(data->input_dev, i);
-        input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, 0);
-    }
-    input_mt_report_pointer_emulation(data->input_dev, false);
-    __set_bit(EV_KEY, data->input_dev->evbit);
-    input_sync(data->input_dev);
+        disable_irq_wake(data->client->irq);
+        for (i = 0; i < data->pdata->num_max_touches; i++)
+        {
+            input_mt_slot(data->input_dev, i);
+            input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, 0);
+        }
+        input_mt_report_pointer_emulation(data->input_dev, false);
+        __set_bit(EV_KEY, data->input_dev->evbit);
+        input_sync(data->input_dev);
     }
 #endif
 
@@ -842,12 +856,9 @@ static int ft5x06_ts_resume(struct device *dev)
     msleep(data->pdata->soft_rst_dly);
 
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    if (!prevent_sleep) {
+    if (!prevent_sleep)
 #endif
     enable_irq(data->client->irq);
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-    }
-#endif
 
 #if CTP_CHARGER_DETECT
 		batt_psy = power_supply_get_by_name("usb");
