@@ -39,6 +39,8 @@
 #endif
 #include <linux/elan_interface.h>
 #include <linux/hardware_info.h>
+
+int var_ps_deactivate = 0;
 /*********************************************************
  * configuration
 *********************************************************/
@@ -431,6 +433,8 @@ static int elan_sensor_psensor_enable(struct elan_epl_data *epld)
 
 	if (ret != 0x02)
 		epl_info("P-sensor i2c err\n");
+
+	var_ps_deactivate = gRawData.ps_state;
 
 	return ret;
 }
@@ -1983,6 +1987,13 @@ static int __init elan_sensor_init(void)
 static void __exit elan_sensor_exit(void)
 {
 	i2c_del_driver(&elan_sensor_driver);
+}
+
+int ps_deactivate(void){
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+	return var_ps_deactivate;
 }
 
 module_init(elan_sensor_init);

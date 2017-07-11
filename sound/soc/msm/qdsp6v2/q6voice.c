@@ -29,9 +29,15 @@
 
 #define TIMEOUT_MS 300
 
-
 #define CMD_STATUS_SUCCESS 0
 #define CMD_STATUS_FAIL 1
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+bool in_phone_call = false;
+#endif
+
+extern int var_ps_deactivate;
+int ps_deactivate(void);
 
 enum {
 	VOC_TOKEN_NONE,
@@ -5195,6 +5201,13 @@ int voc_end_voice_call(uint32_t session_id)
 
 		voice_destroy_mvm_cvs_session(v);
 		v->voc_state = VOC_RELEASE;
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	in_phone_call = false;
+#endif
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+        ps_deactivate();
 		if (common.is_vote_bms) {
 			/* vote low power to BMS during call stop */
 			voice_vote_powerstate_to_bms(v, false);
@@ -5526,6 +5539,9 @@ int voc_start_voice_call(uint32_t session_id)
 		ret = -EINVAL;
 		goto fail;
 	}
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	in_phone_call = true;
+#endif
 fail:
 	mutex_unlock(&v->lock);
 	return ret;

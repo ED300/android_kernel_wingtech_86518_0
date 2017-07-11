@@ -27,6 +27,7 @@
 #include <linux/init.h>
 #include <linux/err.h>
 #include <linux/input/doubletap2wake.h>
+#include <linux/input/sweep2wake.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <linux/input.h>
@@ -71,7 +72,6 @@ MODULE_LICENSE("GPLv2");
 
 /* Resources */
 int dt2w_switch = DT2W_DEFAULT;
-bool dt2w_scr_suspended = false;
 static cputime64_t tap_time_pre = 0;
 static int touch_x = 0, touch_y = 0, touch_nr = 0, x_pre = 0, y_pre = 0;
 static bool touch_x_called = false, touch_y_called = false, touch_cnt = true;
@@ -220,7 +220,7 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 		(code==ABS_MT_TRACKING_ID) ? "ID" :
 		"undef"), code, value);
 #endif
-	if (!dt2w_scr_suspended)
+	if (!scr_suspended)
 		return;
 
 	if (code == ABS_MT_SLOT) {
@@ -311,11 +311,11 @@ static struct input_handler dt2w_input_handler = {
 
 #ifdef CONFIG_POWERSUSPEND
 static void dt2w_power_suspend(struct power_suspend *h) {
-	dt2w_scr_suspended = true;
+	scr_suspended = true;
 }
 
 static void dt2w_power_resume(struct power_suspend *h) {
-	dt2w_scr_suspended = false;
+	scr_suspended = false;
 }
 
 static struct power_suspend dt2w_power_suspend_handler = {
@@ -328,10 +328,10 @@ static int lcd_notifier_callback(struct notifier_block *this,
 {
 	switch (event) {
 	case LCD_EVENT_ON_END:
-		dt2w_scr_suspended = false;
+		scr_suspended = false;
 		break;
 	case LCD_EVENT_OFF_END:
-		dt2w_scr_suspended = true;
+		scr_suspended = true;
 		break;
 	default:
 		break;
