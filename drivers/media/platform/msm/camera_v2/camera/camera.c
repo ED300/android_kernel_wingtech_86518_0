@@ -660,6 +660,13 @@ static int camera_v4l2_close(struct file *filep)
 	opn_idx &= ~mask;
 	atomic_set(&pvdev->opened, opn_idx);
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+/*
+ * Copyright (c) 2017, ED300 <ED300@xda.com>
+ */
+        in_camera = true;
+#endif
+
 	if (atomic_read(&pvdev->opened) == 0) {
 
 		camera_pack_event(filep, MSM_CAMERA_SET_PARM,
@@ -671,7 +678,7 @@ static int camera_v4l2_close(struct file *filep)
 		camera_pack_event(filep, MSM_CAMERA_DEL_SESSION, 0, -1, &event);
 
 		/* Donot wait, imaging server may have crashed */
-		msm_post_event(&event, MSM_POST_EVT_TIMEOUT);
+		msm_post_event(&event, -1);
 		msm_delete_command_ack_q(pvdev->vdev->num, 0);
 
 		/* This should take care of both normal close
@@ -693,13 +700,6 @@ static int camera_v4l2_close(struct file *filep)
 
 	camera_v4l2_vb2_q_release(filep);
 	camera_v4l2_fh_release(filep);
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-/*
- * Copyright (c) 2017, ED300 <ED300@xda.com>
- */
-        in_camera = true;
-#endif
 
 	return rc;
 }
